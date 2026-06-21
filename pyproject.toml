@@ -7,13 +7,12 @@ name = "zohomail-free"
 version = "0.1.0"
 description = "Zoho Mail client for free-tier accounts — no IMAP needed"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "MelkonTech", email = "hello@melkon.tech" }]
 requires-python = ">=3.11"
 keywords = ["zoho", "mail", "email", "imap", "free"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 dependencies = [

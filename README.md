@@ -7,8 +7,7 @@ Zoho locks IMAP/POP3 behind paid plans. This library authenticates via the web U
 ## Install
 
 ```bash
-# from source (PyPI release coming soon)
-pip install git+https://github.com/MelkonTech/zohomail-free.git
+pip install zohomail-free
 playwright install chromium
 ```
 
