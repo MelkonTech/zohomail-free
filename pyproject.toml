@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zohomail-free"
-version = "0.1.4"
+version = "0.1.5"
 description = "Read, send, and reply to Zoho Mail emails on free-tier accounts — no IMAP or POP3 needed"
 readme = "README.md"
 license = "MIT"

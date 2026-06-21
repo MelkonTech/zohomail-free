@@ -22,7 +22,10 @@ from urllib.parse import urlparse, parse_qs
 
 from playwright.async_api import async_playwright
 
-SESSION_FILE = Path.home() / ".zohomail_session.pkl"
+import os
+# Lambda only allows writes to /tmp; use it when HOME isn't writable
+_default_session_dir = Path("/tmp") if os.environ.get("AWS_LAMBDA_FUNCTION_NAME") else Path.home()
+SESSION_FILE = _default_session_dir / ".zohomail_session.pkl"
 
 
 class ZohoMailError(Exception):
