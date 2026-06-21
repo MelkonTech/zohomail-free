@@ -1,0 +1,55 @@
+site_name: zohomail-free
+site_description: Zoho Mail client for free-tier accounts — no IMAP needed
+site_url: https://melkontech.github.io/zohomail-free/
+repo_url: https://github.com/MelkonTech/zohomail-free
+repo_name: MelkonTech/zohomail-free
+copyright: "Built by <a href='https://melkon.tech/Melkon.Tech/ai/' target='_blank'>MelkonTech</a>"
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            docstring_style: google
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - CLI Reference: cli.md
+  - Python API: api-reference.md
+  - REST API: rest-api.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - admonition
+  - pymdownx.details
+  - attr_list

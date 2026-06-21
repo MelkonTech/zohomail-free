@@ -1,4 +1,13 @@
-"""SMTP sender — works on Zoho free tier."""
+"""SMTP sender for Zoho Mail.
+
+Sends email via Zoho's SMTP server using an app-specific password.
+Works on free-tier accounts — SMTP is not gated behind paid plans.
+
+Note:
+    You must generate an app-specific password in Zoho Mail →
+    Settings → Security → App Passwords. Your regular login password
+    will not work here.
+"""
 
 import smtplib
 import ssl
@@ -6,7 +15,7 @@ from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 
 
-def _ssl_ctx():
+def _ssl_ctx() -> ssl.SSLContext:
     try:
         import certifi
         return ssl.create_default_context(cafile=certifi.where())
@@ -27,6 +36,40 @@ def send(
     in_reply_to: str = "",
     references: str = "",
 ) -> dict:
+    """Send an email via Zoho SMTP.
+
+    Args:
+        from_addr: Sender address — must match the authenticated Zoho account.
+        app_password: App-specific password generated in Zoho Security settings.
+        to: List of recipient email addresses.
+        subject: Email subject line.
+        body: Email body — plain text, or HTML if ``html=True``.
+        region: Zoho data-centre — ``"eu"`` (default) or ``"com"``.
+        cc: Optional list of CC addresses.
+        html: If ``True``, send ``body`` as HTML (with a plain-text fallback).
+        in_reply_to: RFC 2822 ``Message-ID`` of the email being replied to.
+            Sets ``In-Reply-To`` and ``References`` headers for threading.
+        references: Override the ``References`` header. Defaults to
+            ``in_reply_to`` when omitted.
+
+    Returns:
+        A dict with ``status``, ``to``, and ``subject`` keys::
+
+            {"status": "sent", "to": ["a@b.com"], "subject": "Hello"}
+
+    Raises:
+        smtplib.SMTPException: On connection or authentication failure.
+
+    Example:
+        >>> from zohomail.smtp import send
+        >>> send(
+        ...     from_addr="you@yourdomain.com",
+        ...     app_password="xxxx-xxxx",
+        ...     to=["friend@example.com"],
+        ...     subject="Hello",
+        ...     body="Hi there!",
+        ... )
+    """
     host = f"smtp.zoho.{'eu' if region.lower() == 'eu' else 'com'}"
     msg = EmailMessage()
     msg["From"] = from_addr

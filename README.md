@@ -1,5 +1,8 @@
 # zohomail-free
 
+> Built by [MelkonTech](https://melkon.tech/Melkon.Tech/ai/)  
+> [Documentation](https://melkontech.github.io/zohomail-free/) · [PyPI](https://pypi.org/project/zohomail-free/) · [GitHub](https://github.com/MelkonTech/zohomail-free)
+
 Zoho Mail client for **free-tier accounts** — no IMAP or POP3 needed.
 
 Zoho locks IMAP/POP3 behind paid plans. This library authenticates via the web UI and uses Zoho's internal API directly, giving you full programmatic access for free.
@@ -106,6 +109,14 @@ curl -H "X-API-Key: your_key" http://localhost:8000/emails
 Zoho's free plan blocks IMAP/POP3 with `ACCESS_RESTRICTED_BY_ZOHOMAIL`. However, their web UI communicates with an internal JSON API (`ml.do` / `md.do`) over HTTPS. This library uses Playwright to authenticate once, saves the session cookie, then makes API calls from within the browser context where cookies are correctly scoped — no paid plan required.
 
 Session cookies are cached at `~/.zohomail_session.pkl` and reused on subsequent runs. If the session expires, the library automatically re-authenticates.
+
+## Documentation
+
+Full docs at **[melkontech.github.io/zohomail-free](https://melkontech.github.io/zohomail-free/)**
+
+## Author
+
+Built by [MelkonTech](https://melkon.tech/Melkon.Tech/ai/)
 
 ## License
 

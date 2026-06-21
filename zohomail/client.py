@@ -1,7 +1,16 @@
 """
-Core Zoho Mail client — uses Playwright to authenticate and hit Zoho's
-internal API from within the browser context (works on free-tier accounts
-where IMAP/POP3 are locked behind paid plans).
+Core Zoho Mail client.
+
+Uses Playwright to authenticate and hit Zoho's internal API from within
+the browser context. Works on free-tier accounts where IMAP/POP3 are
+locked behind paid plans.
+
+Example:
+    >>> import asyncio
+    >>> from zohomail.client import ZohoMailClient
+    >>> client = ZohoMailClient(email="you@example.com", password="secret")
+    >>> emails = asyncio.run(client.list_emails(limit=5))
+    >>> print(emails[0]["subject"])
 """
 
 import json
@@ -17,11 +26,11 @@ SESSION_FILE = Path.home() / ".zohomail_session.pkl"
 
 
 class ZohoMailError(Exception):
-    pass
+    """Base exception for all zohomail-free errors."""
 
 
 class SessionExpiredError(ZohoMailError):
-    pass
+    """Raised when the Zoho session expires and re-authentication fails."""
 
 
 class _HTMLStripper(HTMLParser):
@@ -37,31 +46,69 @@ class _HTMLStripper(HTMLParser):
 
 
 def strip_html(html: str) -> str:
+    """Strip HTML tags and return plain text.
+
+    Args:
+        html: Raw HTML string.
+
+    Returns:
+        Plain text with tags removed and whitespace normalised.
+    """
     p = _HTMLStripper()
     p.feed(html)
     return p.get_text()
 
 
 class ZohoMailClient:
-    def __init__(self, email: str, password: str, region: str = "eu",
-                 account_id: str = "", folder_id: str = "",
-                 session_file: Path | None = None):
+    """Async Zoho Mail client for free-tier accounts.
+
+    Authenticates via the Zoho web UI using Playwright, then communicates
+    with Zoho's internal JSON API (``ml.do`` / ``md.do``). The session
+    cookie is cached at ``~/.zohomail_session.pkl`` and reused on subsequent
+    calls. If the session expires the client re-authenticates automatically.
+
+    Args:
+        email: Your Zoho Mail address (e.g. ``you@yourdomain.com``).
+        password: Your Zoho account login password (not an app password).
+        region: Zoho data-centre region — ``"eu"`` (default) or ``"com"``.
+        account_id: Internal Zoho account ID. Auto-discovered if omitted.
+        folder_id: Internal Zoho inbox folder ID. Auto-discovered if omitted.
+        session_file: Path for the session cookie cache. Defaults to
+            ``~/.zohomail_session.pkl``.
+
+    Example:
+        >>> client = ZohoMailClient(
+        ...     email="you@yourdomain.com",
+        ...     password="your_password",
+        ...     region="eu",
+        ... )
+        >>> emails = asyncio.run(client.list_emails(limit=10))
+    """
+
+    def __init__(
+        self,
+        email: str,
+        password: str,
+        region: str = "eu",
+        account_id: str = "",
+        folder_id: str = "",
+        session_file: Path | None = None,
+    ):
         self.email = email
         self.password = password
         self.region = region.lower()
         self.account_id = account_id
         self.folder_id = folder_id
         self.session_file = session_file or SESSION_FILE
-        # ml_host is dynamic — discovered from network traffic, not hardcoded
         self._ml_host: str = ""
         self._inbox_data = None
 
     @property
-    def _mail_url(self):
+    def _mail_url(self) -> str:
         return f"https://mail.zoho.{'eu' if self.region == 'eu' else 'com'}"
 
     @property
-    def _accounts_url(self):
+    def _accounts_url(self) -> str:
         return f"https://accounts.zoho.{'eu' if self.region == 'eu' else 'com'}"
 
     # ── internal ──────────────────────────────────────────────────────────────
@@ -119,7 +166,6 @@ class ZohoMailClient:
         await page.wait_for_timeout(6000)
 
         if "signin" in page.url or "accounts.zoho" in page.url:
-            # session expired — delete stale cookies and re-login
             if self.session_file.exists():
                 self.session_file.unlink()
             await self._login(page, ctx)
@@ -150,12 +196,12 @@ class ZohoMailClient:
         except json.JSONDecodeError:
             raise ZohoMailError(f"Unexpected response from Zoho API: {result[:200]}")
 
-    def _ml_url(self):
+    def _ml_url(self) -> str:
         if not self._ml_host:
             raise ZohoMailError("API host not yet discovered — call list_emails first")
         return f"https://{self._ml_host}/zm/ml.do"
 
-    def _md_url(self):
+    def _md_url(self) -> str:
         if not self._ml_host:
             raise ZohoMailError("API host not yet discovered — call list_emails first")
         return f"https://{self._ml_host}/zm/md.do"
@@ -163,6 +209,33 @@ class ZohoMailClient:
     # ── public API ────────────────────────────────────────────────────────────
 
     async def list_emails(self, limit: int = 10) -> list[dict]:
+        """List the most recent inbox messages.
+
+        Authenticates if needed, then returns a list of email summaries
+        sorted newest-first. The inbox data is captured from network traffic
+        during page load, so no extra API call is made.
+
+        Args:
+            limit: Maximum number of messages to return. Defaults to ``10``,
+                max ``50``.
+
+        Returns:
+            A list of dicts, each containing:
+
+            - ``id`` (*str*) — Zoho message ID, used with :meth:`read_email`.
+            - ``from`` (*str*) — Sender email address.
+            - ``subject`` (*str*) — Message subject.
+            - ``time_ms`` (*int*) — Received timestamp in milliseconds.
+            - ``unread`` (*bool*) — ``True`` if the message is unread.
+
+        Raises:
+            ZohoMailError: If authentication or the API call fails.
+
+        Example:
+            >>> emails = asyncio.run(client.list_emails(limit=5))
+            >>> for e in emails:
+            ...     print(e["subject"], "-", e["from"])
+        """
         async with async_playwright() as p:
             browser, page = await self._get_page(p)
             try:
@@ -190,10 +263,37 @@ class ZohoMailClient:
                 await browser.close()
 
     async def read_email(self, msg_id: str) -> dict:
+        """Read the full content of a single email.
+
+        Fetches the complete message including HTML body, sender details,
+        and threading headers needed for replies.
+
+        Args:
+            msg_id: The Zoho message ID (``id`` field from :meth:`list_emails`).
+
+        Returns:
+            A dict containing:
+
+            - ``id`` (*str*) — Zoho message ID.
+            - ``from`` (*str*) — Sender email address.
+            - ``reply_to`` (*str*) — Address to send replies to.
+            - ``to`` (*str*) — Recipient address.
+            - ``date`` (*str*) — Human-readable sent date.
+            - ``subject`` (*str*) — Message subject.
+            - ``message_id`` (*str*) — RFC 2822 Message-ID for threading.
+            - ``body`` (*str*) — Plain-text body (stripped from HTML).
+            - ``body_html`` (*str*) — Raw HTML body.
+
+        Raises:
+            ZohoMailError: If authentication or the API call fails.
+
+        Example:
+            >>> email = asyncio.run(client.read_email("1782000221530004400"))
+            >>> print(email["body"])
+        """
         async with async_playwright() as p:
             browser, page = await self._get_page(p)
             try:
-                # reuse inbox data captured on page load to find mailId
                 inbox = self._inbox_data
                 if not inbox:
                     inbox = await self._fetch(page, self._ml_url(), {
@@ -229,6 +329,20 @@ class ZohoMailClient:
                 await browser.close()
 
     async def get_thread_info(self, msg_id: str) -> dict:
+        """Return the minimal headers needed to reply to a message.
+
+        A lightweight alternative to :meth:`read_email` when you only need
+        to send a reply and don't need the body.
+
+        Args:
+            msg_id: The Zoho message ID.
+
+        Returns:
+            A dict with ``reply_to``, ``subject``, and ``message_id`` keys.
+
+        Raises:
+            ZohoMailError: If authentication or the API call fails.
+        """
         email = await self.read_email(msg_id)
         return {
             "reply_to":   email["reply_to"],
