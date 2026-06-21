@@ -117,6 +117,19 @@ print(msg.content[0].text)
 
 Available helpers: `email_to_text`, `email_to_prompt`, `emails_to_messages`, `email_to_tool_result`.
 
+## Hosted REST API
+
+Don't want to install anything? Use the free hosted API at **[zohomail.free.melkon.tech](https://zohomail.free.melkon.tech)**:
+
+```bash
+curl https://zohomail.free.melkon.tech/emails \
+  -H "x-zoho-email: you@yourdomain.com" \
+  -H "x-zoho-password: yourpassword" \
+  -H "x-zoho-region: eu"
+```
+
+Interactive docs at **[zohomail.free.melkon.tech/docs](https://zohomail.free.melkon.tech/docs)** — no sign-up, no API key.
+
 ## How it works
 
 Zoho's free plan blocks IMAP/POP3 with `ACCESS_RESTRICTED_BY_ZOHOMAIL`. However, their web UI talks to an internal JSON API (`ml.do` / `md.do`) over HTTPS. This library uses Playwright to authenticate once, saves the session cookie at `~/.zohomail_session.pkl`, then makes API calls from within the browser context — no paid plan needed.

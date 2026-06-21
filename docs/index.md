@@ -48,6 +48,19 @@ zohomail send --to friend@example.com --subject "Hi" --body "Hello!"
 zohomail reply --id 1782000221530004400 --body "Thanks!"
 ```
 
+## REST API
+
+Don't want to install anything? Use the hosted REST API at **[zohomail.free.melkon.tech](https://zohomail.free.melkon.tech)**:
+
+```bash
+curl https://zohomail.free.melkon.tech/emails \
+  -H "x-zoho-email: you@yourdomain.com" \
+  -H "x-zoho-password: yourpassword" \
+  -H "x-zoho-region: eu"
+```
+
+Interactive docs at **[zohomail.free.melkon.tech/docs](https://zohomail.free.melkon.tech/docs)** — no sign-up, no API key, just your Zoho credentials.
+
 ---
 
 > Built by [MelkonTech](https://melkon.tech) · [GitHub](https://github.com/MelkonTech/zohomail-free) · [PyPI](https://pypi.org/project/zohomail-free/)
