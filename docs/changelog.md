@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3 — 2026-06-21
+
+- Added `zohomail.ai` — helpers for feeding emails into OpenAI, Anthropic, and other LLM SDKs
+- REST API server moved to `server/` (not shipped with the pip package)
+- Removed `fastapi`, `uvicorn`, `pydantic` from package dependencies — leaner install
+- Removed `zohomail-api` CLI entry point from package
+
 ## 0.1.2 — 2026-06-21
 
 - Added `Documentation` URL to PyPI metadata

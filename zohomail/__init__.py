@@ -7,7 +7,7 @@ you full inbox access and SMTP sending without paying for a plan.
 
 Quickstart:
     >>> import asyncio
-    >>> from zohomail.client import ZohoMailClient
+    >>> from zohomail import ZohoMailClient, send
     >>>
     >>> client = ZohoMailClient(
     ...     email="you@yourdomain.com",
@@ -18,15 +18,21 @@ Quickstart:
     >>> for e in emails:
     ...     print(e["subject"])
 
+AI integration:
+    >>> from zohomail.ai import email_to_prompt, emails_to_messages
+    >>> # feed directly into OpenAI / Anthropic / any LLM SDK
+
 Public API:
     - :class:`~zohomail.client.ZohoMailClient` — read emails
     - :func:`~zohomail.smtp.send` — send / reply via SMTP
+    - :mod:`~zohomail.ai` — helpers for LLM integration
     - :class:`~zohomail.client.ZohoMailError` — base exception
     - :class:`~zohomail.client.SessionExpiredError` — session error
 """
 
 from zohomail.client import ZohoMailClient, ZohoMailError, SessionExpiredError
 from zohomail.smtp import send
+from zohomail import ai  # noqa: F401 — re-export the module
 
-__version__ = "0.1.2"
-__all__ = ["ZohoMailClient", "ZohoMailError", "SessionExpiredError", "send"]
+__version__ = "0.1.3"
+__all__ = ["ZohoMailClient", "ZohoMailError", "SessionExpiredError", "send", "ai"]

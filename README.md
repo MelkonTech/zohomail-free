@@ -7,7 +7,7 @@
 > Built by [MelkonTech](https://melkon.tech)  
 > [Documentation](https://melkontech.github.io/zohomail-free/) · [PyPI](https://pypi.org/project/zohomail-free/) · [GitHub](https://github.com/MelkonTech/zohomail-free)
 
-**Read, send, and reply to Zoho Mail emails from Python or the command line — on a free account.**
+**Read, send, and reply to Zoho Mail emails from Python or the CLI — on a free account.**
 
 Zoho locks IMAP/POP3 behind paid plans, so standard email libraries don't work on free accounts. `zohomail-free` works around this by authenticating via the Zoho web UI and calling their internal API directly — giving you full inbox access and SMTP sending without paying for a plan.
 
@@ -22,7 +22,7 @@ playwright install chromium
 
 Create a `.env` file with your credentials:
 
-```bash
+```env
 ZOHO_EMAIL=you@yourdomain.com
 ZOHO_PASSWORD=your_zoho_login_password
 ZOHO_APP_PASSWORD=your_app_specific_password   # for sending
@@ -56,7 +56,7 @@ print(email["body"])
 send(
     from_addr="you@yourdomain.com",
     app_password="your_app_password",
-    to="friend@example.com",
+    to=["friend@example.com"],
     subject="Hello",
     body="Hi there!",
     region="eu",
@@ -80,36 +80,45 @@ zohomail send --to someone@example.com --subject "Hello" --body "Hi there"
 zohomail reply --id 1782000221530004400 --body "Thanks!"
 ```
 
-## Self-hosted REST API
+## AI integration
 
-Run a local API server over your Zoho account:
+Helpers in `zohomail.ai` make it easy to pipe emails into any LLM without extra dependencies:
 
-```bash
-# Set API_KEY in your .env, then:
-zohomail-api
+```python
+import asyncio
+from openai import OpenAI
+from zohomail import ZohoMailClient
+from zohomail.ai import emails_to_messages, email_to_prompt
 
-# Or with Docker
-docker build -t zohomail-free .
-docker run -p 8000:8000 --env-file .env zohomail-free
+client = ZohoMailClient(email="you@zoho.com", password="...", region="eu")
+emails = asyncio.run(client.list_emails(limit=10))
+
+# Summarise inbox with OpenAI
+oai = OpenAI()
+resp = oai.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=emails_to_messages(emails, system="Summarise these emails briefly."),
+)
+print(resp.choices[0].message.content)
+
+# Draft a reply with Claude
+import anthropic
+email = asyncio.run(client.read_email(emails[0]["id"]))
+
+ac = anthropic.Anthropic()
+msg = ac.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=512,
+    messages=[{"role": "user", "content": email_to_prompt(email, "Write a short reply:")}],
+)
+print(msg.content[0].text)
 ```
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/emails` | List inbox (`?limit=10`) |
-| GET | `/emails/{id}` | Read full email |
-| POST | `/emails/send` | Send new email |
-| POST | `/emails/{id}/reply` | Reply to email |
-| GET | `/health` | Health check |
-
-All endpoints require `X-API-Key: <your_key>` header.
-
-```bash
-curl -H "X-API-Key: your_key" http://localhost:8000/emails
-```
+Available helpers: `email_to_text`, `email_to_prompt`, `emails_to_messages`, `email_to_tool_result`.
 
 ## How it works
 
-Zoho's free plan blocks IMAP/POP3 with `ACCESS_RESTRICTED_BY_ZOHOMAIL`. However, their web UI talks to an internal JSON API (`ml.do` / `md.do`) over HTTPS. This library uses Playwright to authenticate once, saves the session cookie at `~/.zohomail_session.pkl`, then makes API calls from within the browser context where cookies are correctly scoped — no paid plan needed.
+Zoho's free plan blocks IMAP/POP3 with `ACCESS_RESTRICTED_BY_ZOHOMAIL`. However, their web UI talks to an internal JSON API (`ml.do` / `md.do`) over HTTPS. This library uses Playwright to authenticate once, saves the session cookie at `~/.zohomail_session.pkl`, then makes API calls from within the browser context — no paid plan needed.
 
 On subsequent runs the saved session is reused. If it expires, the library re-authenticates automatically.
 

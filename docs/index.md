@@ -12,7 +12,7 @@ Zoho locks IMAP/POP3 access behind paid plans, which means standard email librar
 - **Send & reply** — compose new emails and reply with correct threading headers
 - **CLI** — `zohomail list`, `zohomail read`, `zohomail send`, `zohomail reply`
 - **Python library** — async `ZohoMailClient` for use in your own code
-- **Self-hosted REST API** — FastAPI server, Dockerised, Railway-ready
+- **AI integration** — `zohomail.ai` helpers to pipe emails into OpenAI, Anthropic, or any LLM
 - **Session caching** — authenticates once, reuses cookie; auto re-logins on expiry
 
 ## Install
