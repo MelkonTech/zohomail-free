@@ -85,34 +85,37 @@ class ZohoMailClient:
     async def _get_page(self, p):
         browser, ctx = await self._make_context(p)
         page = await ctx.new_page()
-        await page.goto(f"{self._mail_url}/mail", wait_until="domcontentloaded")
-        await page.wait_for_timeout(5000)
-        if "signin" in page.url or "accounts.zoho" in page.url:
-            await self._login(page, ctx)
-            await page.goto(f"{self._mail_url}/mail", wait_until="domcontentloaded")
-            await page.wait_for_timeout(5000)
-        return browser, page
 
-    async def _discover_ids(self, page):
-        """Auto-discover account_id and inbox folder_id from network traffic."""
-        if self.account_id and self.folder_id:
-            return
-        captured = {}
+        # set up listener BEFORE navigation so we capture ml.do on page load
+        self._inbox_data = None
 
         async def on_response(res):
             if "ml.do" in res.url:
                 from urllib.parse import urlparse, parse_qs
                 parsed = urlparse(res.url)
                 qs = parse_qs(parsed.query)
-                if not self.account_id:
-                    self.account_id = (qs.get("accId") or [""])[0]
-                if not self.folder_id:
-                    self.folder_id = (qs.get("folId") or [""])[0]
-                self._ml_host = parsed.netloc
+                self.account_id = self.account_id or (qs.get("accId") or [""])[0]
+                self.folder_id  = self.folder_id  or (qs.get("folId") or [""])[0]
+                self._ml_host   = parsed.netloc
+                try:
+                    self._inbox_data = await res.json()
+                except Exception:
+                    pass
 
         page.on("response", on_response)
-        await page.wait_for_timeout(3000)
-        page.remove_listener("response", on_response)
+        await page.goto(f"{self._mail_url}/mail", wait_until="domcontentloaded")
+        await page.wait_for_timeout(6000)
+
+        if "signin" in page.url or "accounts.zoho" in page.url:
+            await self._login(page, ctx)
+            await page.goto(f"{self._mail_url}/mail", wait_until="domcontentloaded")
+            await page.wait_for_timeout(6000)
+
+        return browser, page
+
+    async def _discover_ids(self, page):
+        """No-op — IDs are captured during _get_page navigation."""
+        pass
 
     async def _fetch(self, page, url, params):
         qs = "&".join(f"{k}={v}" for k, v in params.items())
@@ -129,13 +132,16 @@ class ZohoMailClient:
         async with async_playwright() as p:
             browser, page = await self._get_page(p)
             try:
-                await self._discover_ids(page)
-                data = await self._fetch(page, f"https://{self._ml_host}/zm/ml.do", {
-                    "xhr": int(time.time() * 1000), "mode": "listing",
-                    "accId": self.account_id, "from": 1, "to": limit,
-                    "summary": "true", "sortBy": "date", "sortOrder": "false",
-                    "folderSpec": 2, "folId": self.folder_id,
-                })
+                # reuse data already captured during page load if available
+                if self._inbox_data:
+                    data = self._inbox_data
+                else:
+                    data = await self._fetch(page, f"https://{self._ml_host}/zm/ml.do", {
+                        "xhr": int(time.time() * 1000), "mode": "listing",
+                        "accId": self.account_id, "from": 1, "to": limit,
+                        "summary": "true", "sortBy": "date", "sortOrder": "false",
+                        "folderSpec": 2, "folId": self.folder_id,
+                    })
                 msgs = [m for m in data[1] if isinstance(m, dict) and "M" in m]
                 return [
                     {
@@ -145,7 +151,7 @@ class ZohoMailClient:
                         "time_ms": int(m.get("LTIME", 0)),
                         "unread":  m.get("RS", 1) != 1,
                     }
-                    for m in msgs
+                    for m in msgs[:limit]
                 ]
             finally:
                 await browser.close()

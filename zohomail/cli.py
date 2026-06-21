@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-load_dotenv(override=True)
+load_dotenv(dotenv_path=Path.cwd() / ".env", override=True)
 
 from zohomail.client import ZohoMailClient
 from zohomail.smtp import send as smtp_send
