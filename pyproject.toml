@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "zohomail-free"
+version = "0.1.0"
+description = "Zoho Mail client for free-tier accounts — no IMAP needed"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "MelkonTech", email = "hello@melkon.tech" }]
+requires-python = ">=3.11"
+keywords = ["zoho", "mail", "email", "imap", "free"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "playwright>=1.44.0",
+    "fastapi>=0.111.0",
+    "uvicorn>=0.30.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+    "certifi>=2024.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+zohomail = "zohomail.cli:main"
+zohomail-api = "zohomail.api_server:main"
+
+[project.urls]
+Homepage = "https://github.com/MelkonTech/zohomail-free"
+Issues = "https://github.com/MelkonTech/zohomail-free/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["zohomail*"]
