@@ -7,7 +7,8 @@ Zoho locks IMAP/POP3 behind paid plans. This library authenticates via the web U
 ## Install
 
 ```bash
-pip install zohomail-free
+# from source (PyPI release coming soon)
+pip install git+https://github.com/MelkonTech/zohomail-free.git
 playwright install chromium
 ```
 
@@ -31,13 +32,13 @@ ZOHO_REGION=eu   # eu or com
 zohomail list
 zohomail list --limit 20 --json
 
-# read an email
+# read a message (get the id from list output)
 zohomail read --id 1782000221530004400
 
-# send
+# send new email
 zohomail send --to someone@example.com --subject "Hello" --body "Hi there"
 
-# reply
+# reply to an email
 zohomail reply --id 1782000221530004400 --body "Thanks!"
 ```
 
@@ -53,10 +54,12 @@ client = ZohoMailClient(
     region="eu",
 )
 
+# list inbox
 emails = asyncio.run(client.list_emails(limit=5))
 for e in emails:
     print(e["subject"], "-", e["from"])
 
+# read full email
 email = asyncio.run(client.read_email(emails[0]["id"]))
 print(email["body"])
 ```
@@ -64,13 +67,14 @@ print(email["body"])
 ## Self-hosted API
 
 ```bash
-cp .env.example .env   # fill in credentials + API_KEY
+cp .env.example .env   # fill in credentials + set a strong API_KEY
 
 # with Docker
 docker build -t zohomail-free .
 docker run -p 8000:8000 --env-file .env zohomail-free
 
 # or directly
+pip install git+https://github.com/MelkonTech/zohomail-free.git
 zohomail-api
 ```
 
@@ -84,25 +88,26 @@ zohomail-api
 | POST | `/emails/{id}/reply` | Reply to email |
 | GET | `/health` | Health check |
 
-All endpoints require `X-API-Key: <your_key>` header.
+All endpoints require `X-API-Key: <your_key>` header (set `API_KEY` in `.env`).
 
 ```bash
-curl -H "X-API-Key: changeme" http://localhost:8000/emails
+curl -H "X-API-Key: your_key" http://localhost:8000/emails
 ```
 
 ## Deploy to Railway
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app)
-
-1. Push this repo to GitHub
-2. Connect to Railway → New Project → Deploy from GitHub
-3. Add environment variables from `.env.example`
-4. Done — Railway auto-detects the Dockerfile
+1. Fork this repo on GitHub
+2. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub repo
+3. Select your fork
+4. Add environment variables from `.env.example` in Railway's Variables tab
+5. Deploy — Railway auto-detects the Dockerfile
 
 ## How it works
 
-Zoho's free plan blocks IMAP/POP3 with `ACCESS_RESTRICTED_BY_ZOHOMAIL`. However, their web UI uses an internal JSON API (`ml.do` / `md.do`) over HTTPS. This library uses Playwright to authenticate once, saves the session, then makes API calls from within the browser context where cookies are correctly scoped — no paid plan required.
+Zoho's free plan blocks IMAP/POP3 with `ACCESS_RESTRICTED_BY_ZOHOMAIL`. However, their web UI communicates with an internal JSON API (`ml.do` / `md.do`) over HTTPS. This library uses Playwright to authenticate once, saves the session cookie, then makes API calls from within the browser context where cookies are correctly scoped — no paid plan required.
+
+Session cookies are cached at `~/.zohomail_session.pkl` and reused on subsequent runs. If the session expires, the library automatically re-authenticates.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE)

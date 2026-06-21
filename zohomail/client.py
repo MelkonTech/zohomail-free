@@ -5,15 +5,23 @@ where IMAP/POP3 are locked behind paid plans).
 """
 
 import json
-import os
 import pickle
 import time
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs
 
 from playwright.async_api import async_playwright
 
 SESSION_FILE = Path.home() / ".zohomail_session.pkl"
+
+
+class ZohoMailError(Exception):
+    pass
+
+
+class SessionExpiredError(ZohoMailError):
+    pass
 
 
 class _HTMLStripper(HTMLParser):
@@ -44,7 +52,9 @@ class ZohoMailClient:
         self.account_id = account_id
         self.folder_id = folder_id
         self.session_file = session_file or SESSION_FILE
-        self._ml_host = f"eu1-ofzm.zoho.{'eu' if self.region == 'eu' else 'com'}"
+        # ml_host is dynamic — discovered from network traffic, not hardcoded
+        self._ml_host: str = ""
+        self._inbox_data = None
 
     @property
     def _mail_url(self):
@@ -60,8 +70,11 @@ class ZohoMailClient:
         browser = await p.chromium.launch(headless=True)
         ctx = await browser.new_context()
         if self.session_file.exists():
-            cookies = pickle.loads(self.session_file.read_bytes())
-            await ctx.add_cookies(cookies)
+            try:
+                cookies = pickle.loads(self.session_file.read_bytes())
+                await ctx.add_cookies(cookies)
+            except Exception:
+                pass
         return browser, ctx
 
     async def _login(self, page, ctx):
@@ -79,19 +92,18 @@ class ZohoMailClient:
                 await page.wait_for_timeout(2000)
             except Exception:
                 pass
+        if "signin" in page.url or "accounts.zoho" in page.url:
+            raise ZohoMailError("Login failed — check ZOHO_EMAIL and ZOHO_PASSWORD")
         cookies = await ctx.cookies()
         self.session_file.write_bytes(pickle.dumps(cookies))
 
     async def _get_page(self, p):
         browser, ctx = await self._make_context(p)
         page = await ctx.new_page()
-
-        # set up listener BEFORE navigation so we capture ml.do on page load
         self._inbox_data = None
 
         async def on_response(res):
             if "ml.do" in res.url:
-                from urllib.parse import urlparse, parse_qs
                 parsed = urlparse(res.url)
                 qs = parse_qs(parsed.query)
                 self.account_id = self.account_id or (qs.get("accId") or [""])[0]
@@ -107,24 +119,46 @@ class ZohoMailClient:
         await page.wait_for_timeout(6000)
 
         if "signin" in page.url or "accounts.zoho" in page.url:
+            # session expired — delete stale cookies and re-login
+            if self.session_file.exists():
+                self.session_file.unlink()
             await self._login(page, ctx)
+            self._inbox_data = None
             await page.goto(f"{self._mail_url}/mail", wait_until="domcontentloaded")
             await page.wait_for_timeout(6000)
 
+        if not self._ml_host:
+            raise ZohoMailError(
+                "Could not discover Zoho API host. "
+                "The page may not have loaded correctly."
+            )
+
         return browser, page
 
-    async def _discover_ids(self, page):
-        """No-op — IDs are captured during _get_page navigation."""
-        pass
-
-    async def _fetch(self, page, url, params):
+    async def _fetch(self, page, url: str, params: dict):
         qs = "&".join(f"{k}={v}" for k, v in params.items())
         full = f"{url}?{qs}"
         result = await page.evaluate(f"""async () => {{
             const r = await fetch({json.dumps(full)}, {{credentials: 'include'}});
+            if (!r.ok) throw new Error('HTTP ' + r.status);
             return await r.text();
         }}""")
-        return json.loads(result)
+        if not result:
+            raise ZohoMailError(f"Empty response from {url}")
+        try:
+            return json.loads(result)
+        except json.JSONDecodeError:
+            raise ZohoMailError(f"Unexpected response from Zoho API: {result[:200]}")
+
+    def _ml_url(self):
+        if not self._ml_host:
+            raise ZohoMailError("API host not yet discovered — call list_emails first")
+        return f"https://{self._ml_host}/zm/ml.do"
+
+    def _md_url(self):
+        if not self._ml_host:
+            raise ZohoMailError("API host not yet discovered — call list_emails first")
+        return f"https://{self._ml_host}/zm/md.do"
 
     # ── public API ────────────────────────────────────────────────────────────
 
@@ -132,11 +166,10 @@ class ZohoMailClient:
         async with async_playwright() as p:
             browser, page = await self._get_page(p)
             try:
-                # reuse data already captured during page load if available
                 if self._inbox_data:
                     data = self._inbox_data
                 else:
-                    data = await self._fetch(page, f"https://{self._ml_host}/zm/ml.do", {
+                    data = await self._fetch(page, self._ml_url(), {
                         "xhr": int(time.time() * 1000), "mode": "listing",
                         "accId": self.account_id, "from": 1, "to": limit,
                         "summary": "true", "sortBy": "date", "sortOrder": "false",
@@ -160,19 +193,21 @@ class ZohoMailClient:
         async with async_playwright() as p:
             browser, page = await self._get_page(p)
             try:
-                await self._discover_ids(page)
-                list_data = await self._fetch(page, f"https://{self._ml_host}/zm/ml.do", {
-                    "xhr": int(time.time() * 1000), "mode": "listing",
-                    "accId": self.account_id, "from": 1, "to": 50,
-                    "summary": "true", "sortBy": "date", "sortOrder": "false",
-                    "folderSpec": 2, "folId": self.folder_id,
-                })
+                # reuse inbox data captured on page load to find mailId
+                inbox = self._inbox_data
+                if not inbox:
+                    inbox = await self._fetch(page, self._ml_url(), {
+                        "xhr": int(time.time() * 1000), "mode": "listing",
+                        "accId": self.account_id, "from": 1, "to": 50,
+                        "summary": "true", "sortBy": "date", "sortOrder": "false",
+                        "folderSpec": 2, "folId": self.folder_id,
+                    })
                 mail_id = next(
-                    (m.get("MAILID", "") for m in list_data[1]
+                    (m.get("MAILID", "") for m in inbox[1]
                      if isinstance(m, dict) and m.get("M") == msg_id),
                     ""
                 )
-                data = await self._fetch(page, f"https://{self._ml_host}/zm/md.do", {
+                data = await self._fetch(page, self._md_url(), {
                     "xhr": int(time.time() * 1000), "accId": self.account_id,
                     "summary": "true", "msgId": msg_id, "vfc": "false",
                     "split": "true", "folId": self.folder_id, "mailId": mail_id,
@@ -194,7 +229,6 @@ class ZohoMailClient:
                 await browser.close()
 
     async def get_thread_info(self, msg_id: str) -> dict:
-        """Return just the fields needed to reply (fast path)."""
         email = await self.read_email(msg_id)
         return {
             "reply_to":   email["reply_to"],
