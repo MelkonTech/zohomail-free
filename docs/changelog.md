@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 — 2026-06-21
+
+- Clearer package description emphasising read + send + reply capabilities
+
 ## 0.1.0 — 2026-06-21
 
 Initial release.

@@ -1,9 +1,9 @@
-"""zohomail-free — Zoho Mail client for free-tier accounts.
+"""zohomail-free — Read, send, and reply to Zoho Mail emails on free-tier accounts.
 
-Provides programmatic access to Zoho Mail without IMAP or POP3,
-which are locked behind Zoho's paid plans. Uses Playwright to
-authenticate via the web UI and communicates with Zoho's internal
-JSON API directly.
+Zoho locks IMAP/POP3 behind paid plans, so standard email libraries
+don't work on free accounts. This library authenticates via the Zoho
+web UI and communicates with their internal JSON API directly — giving
+you full inbox access and SMTP sending without paying for a plan.
 
 Quickstart:
     >>> import asyncio
@@ -28,5 +28,5 @@ Public API:
 from zohomail.client import ZohoMailClient, ZohoMailError, SessionExpiredError
 from zohomail.smtp import send
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __all__ = ["ZohoMailClient", "ZohoMailError", "SessionExpiredError", "send"]

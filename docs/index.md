@@ -1,8 +1,8 @@
 # zohomail-free
 
-**Zoho Mail for free-tier accounts — no IMAP or POP3 needed.**
+**Read, send, and reply to Zoho Mail emails from Python or the CLI — on a free account.**
 
-Zoho locks IMAP/POP3 access behind paid plans. `zohomail-free` bypasses this by authenticating via the Zoho web UI and communicating with Zoho's internal JSON API directly — giving you full programmatic access at no cost.
+Zoho locks IMAP/POP3 access behind paid plans, which means standard email libraries like `imaplib` simply don't work on free accounts. `zohomail-free` solves this by authenticating via the Zoho web UI and talking to their internal JSON API directly — so you can read your inbox, send emails, and reply with proper threading, all without upgrading your plan.
 
 ---
 

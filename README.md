@@ -3,9 +3,9 @@
 > Built by [MelkonTech](https://melkon.tech/Melkon.Tech/ai/)  
 > [Documentation](https://melkontech.github.io/zohomail-free/) · [PyPI](https://pypi.org/project/zohomail-free/) · [GitHub](https://github.com/MelkonTech/zohomail-free)
 
-Zoho Mail client for **free-tier accounts** — no IMAP or POP3 needed.
+**Read, send, and reply to Zoho Mail emails from Python or the command line — for free.**
 
-Zoho locks IMAP/POP3 behind paid plans. This library authenticates via the web UI and uses Zoho's internal API directly, giving you full programmatic access for free.
+Zoho locks IMAP/POP3 behind paid plans, so you can't use standard email libraries on a free account. `zohomail-free` works around this by authenticating via the Zoho web UI and hitting their internal API directly — giving you full access to your inbox, outbox, and SMTP sending without paying for a plan.
 
 ## Install
 
