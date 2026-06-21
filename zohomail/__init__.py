@@ -34,5 +34,5 @@ from zohomail.client import ZohoMailClient, ZohoMailError, SessionExpiredError
 from zohomail.smtp import send
 from zohomail import ai  # noqa: F401 — re-export the module
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 __all__ = ["ZohoMailClient", "ZohoMailError", "SessionExpiredError", "send", "ai"]

@@ -34,7 +34,8 @@ from zohomail.smtp import send as smtp_send
 API_KEY      = os.environ.get("API_KEY", "changeme")
 EMAIL        = os.environ.get("ZOHO_EMAIL", "")
 PASSWORD     = os.environ.get("ZOHO_PASSWORD", "")
-APP_PASSWORD = os.environ.get("ZOHO_APP_PASSWORD", "")
+# App password only needed when 2FA is enabled; falls back to regular password
+APP_PASSWORD = os.environ.get("ZOHO_APP_PASSWORD") or os.environ.get("ZOHO_PASSWORD", "")
 REGION       = os.environ.get("ZOHO_REGION", "eu")
 
 app = FastAPI(

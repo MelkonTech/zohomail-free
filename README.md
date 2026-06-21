@@ -25,11 +25,12 @@ Create a `.env` file with your credentials:
 ```env
 ZOHO_EMAIL=you@yourdomain.com
 ZOHO_PASSWORD=your_zoho_login_password
-ZOHO_APP_PASSWORD=your_app_specific_password   # for sending
 ZOHO_REGION=eu   # eu or com
-```
 
-> Generate an app-specific password in Zoho Mail → Settings → Security → App Passwords.
+# Optional — only needed if you have 2FA enabled on your Zoho account.
+# If not set, ZOHO_PASSWORD is used for SMTP sending instead.
+ZOHO_APP_PASSWORD=your_app_specific_password
+```
 
 ## Python
 

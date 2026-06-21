@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4 — 2026-06-21
+
+- `ZOHO_APP_PASSWORD` is now optional — falls back to `ZOHO_PASSWORD` for SMTP if not set (app password is only needed when 2FA is enabled)
+
 ## 0.1.3 — 2026-06-21
 
 - Added `zohomail.ai` — helpers for feeding emails into OpenAI, Anthropic, and other LLM SDKs

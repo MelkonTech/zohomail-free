@@ -23,10 +23,12 @@ def _client() -> ZohoMailClient:
     return ZohoMailClient(email=email, password=password, region=region)
 
 
-def _app_password() -> str:
-    pw = os.environ.get("ZOHO_APP_PASSWORD")
+def _smtp_password() -> str:
+    # Use ZOHO_APP_PASSWORD if set (required when 2FA is enabled),
+    # otherwise fall back to the regular login password.
+    pw = os.environ.get("ZOHO_APP_PASSWORD") or os.environ.get("ZOHO_PASSWORD")
     if not pw:
-        sys.exit("ERROR: set ZOHO_APP_PASSWORD for sending mail")
+        sys.exit("ERROR: set ZOHO_PASSWORD (or ZOHO_APP_PASSWORD if 2FA is enabled)")
     return pw
 
 
@@ -71,7 +73,7 @@ def cmd_send(args):
         sys.exit("ERROR: provide --body or --body-file")
     result = smtp_send(
         from_addr=os.environ.get("ZOHO_EMAIL", ""),
-        app_password=_app_password(),
+        app_password=_smtp_password(),
         to=args.to,
         subject=args.subject or "",
         body=body,
@@ -95,7 +97,7 @@ def cmd_reply(args):
         subject = f"Re: {subject}"
     result = smtp_send(
         from_addr=os.environ.get("ZOHO_EMAIL", ""),
-        app_password=_app_password(),
+        app_password=_smtp_password(),
         to=[thread["reply_to"]],
         subject=subject,
         body=body,
