@@ -42,12 +42,12 @@ app = FastAPI(
     title="zohomail-free API",
     description=(
         "Zoho Mail REST API for free-tier accounts — no IMAP needed.\n\n"
-        "Built by [MelkonTech](https://melkon.tech/Melkon.Tech/ai/)"
+        "Built by [MelkonTech](https://melkon.tech)"
     ),
     version="0.1.0",
     contact={
         "name": "MelkonTech",
-        "url": "https://melkon.tech/Melkon.Tech/ai/",
+        "url": "https://melkon.tech",
     },
     license_info={
         "name": "MIT",

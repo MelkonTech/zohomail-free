@@ -28,5 +28,5 @@ Public API:
 from zohomail.client import ZohoMailClient, ZohoMailError, SessionExpiredError
 from zohomail.smtp import send
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 __all__ = ["ZohoMailClient", "ZohoMailError", "SessionExpiredError", "send"]

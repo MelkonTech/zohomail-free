@@ -61,4 +61,4 @@ On first run, Playwright opens a headless browser, logs in, and saves the sessio
 
 ---
 
-> Built by [MelkonTech](https://melkon.tech/Melkon.Tech/ai/)
+> Built by [MelkonTech](https://melkon.tech)

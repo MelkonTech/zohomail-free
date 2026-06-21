@@ -20,4 +20,4 @@
 
 ---
 
-> Built by [MelkonTech](https://melkon.tech/Melkon.Tech/ai/)
+> Built by [MelkonTech](https://melkon.tech)

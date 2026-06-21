@@ -104,4 +104,4 @@ zohomail reply --id 1782000221530004400 --body "Thanks, got it!"
 
 ---
 
-> Built by [MelkonTech](https://melkon.tech/Melkon.Tech/ai/)
+> Built by [MelkonTech](https://melkon.tech)

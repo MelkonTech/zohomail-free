@@ -50,4 +50,4 @@ zohomail reply --id 1782000221530004400 --body "Thanks!"
 
 ---
 
-> Built by [MelkonTech](https://melkon.tech/Melkon.Tech/ai/) · [GitHub](https://github.com/MelkonTech/zohomail-free) · [PyPI](https://pypi.org/project/zohomail-free/)
+> Built by [MelkonTech](https://melkon.tech) · [GitHub](https://github.com/MelkonTech/zohomail-free) · [PyPI](https://pypi.org/project/zohomail-free/)

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 — 2026-06-21
+
+- Added `Documentation` URL to PyPI metadata
+- Badges (version, Python, license) added to README
+- README restructured to focus on usage
+- Fixed author URLs throughout (`/Melkon.Tech/ai/` → `melkon.tech`)
+
 ## 0.1.1 — 2026-06-21
 
 - Clearer package description emphasising read + send + reply capabilities
@@ -17,4 +24,4 @@ Initial release.
 
 ---
 
-> Built by [MelkonTech](https://melkon.tech/Melkon.Tech/ai/)
+> Built by [MelkonTech](https://melkon.tech)

@@ -142,4 +142,4 @@ See [Getting Started](getting-started.md) for Railway deployment steps.
 
 ---
 
-> Built by [MelkonTech](https://melkon.tech/Melkon.Tech/ai/)
+> Built by [MelkonTech](https://melkon.tech)

@@ -1,11 +1,15 @@
 # zohomail-free
 
-> Built by [MelkonTech](https://melkon.tech/Melkon.Tech/ai/)  
+[![PyPI version](https://img.shields.io/pypi/v/zohomail-free.svg)](https://pypi.org/project/zohomail-free/)
+[![Python 3.11+](https://img.shields.io/pypi/pyversions/zohomail-free.svg)](https://pypi.org/project/zohomail-free/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+> Built by [MelkonTech](https://melkon.tech)  
 > [Documentation](https://melkontech.github.io/zohomail-free/) · [PyPI](https://pypi.org/project/zohomail-free/) · [GitHub](https://github.com/MelkonTech/zohomail-free)
 
-**Read, send, and reply to Zoho Mail emails from Python or the command line — for free.**
+**Read, send, and reply to Zoho Mail emails from Python or the command line — on a free account.**
 
-Zoho locks IMAP/POP3 behind paid plans, so you can't use standard email libraries on a free account. `zohomail-free` works around this by authenticating via the Zoho web UI and hitting their internal API directly — giving you full access to your inbox, outbox, and SMTP sending without paying for a plan.
+Zoho locks IMAP/POP3 behind paid plans, so standard email libraries don't work on free accounts. `zohomail-free` works around this by authenticating via the Zoho web UI and calling their internal API directly — giving you full inbox access and SMTP sending without paying for a plan.
 
 ## Install
 
@@ -16,7 +20,7 @@ playwright install chromium
 
 ## Setup
 
-Copy `.env.example` to `.env` and fill in your credentials:
+Create a `.env` file with your credentials:
 
 ```bash
 ZOHO_EMAIL=you@yourdomain.com
@@ -27,28 +31,11 @@ ZOHO_REGION=eu   # eu or com
 
 > Generate an app-specific password in Zoho Mail → Settings → Security → App Passwords.
 
-## CLI
-
-```bash
-# list inbox
-zohomail list
-zohomail list --limit 20 --json
-
-# read a message (get the id from list output)
-zohomail read --id 1782000221530004400
-
-# send new email
-zohomail send --to someone@example.com --subject "Hello" --body "Hi there"
-
-# reply to an email
-zohomail reply --id 1782000221530004400 --body "Thanks!"
-```
-
 ## Python
 
 ```python
 import asyncio
-from zohomail.client import ZohoMailClient
+from zohomail import ZohoMailClient, send
 
 client = ZohoMailClient(
     email="you@yourdomain.com",
@@ -56,31 +43,55 @@ client = ZohoMailClient(
     region="eu",
 )
 
-# list inbox
+# List inbox
 emails = asyncio.run(client.list_emails(limit=5))
 for e in emails:
-    print(e["subject"], "-", e["from"])
+    print(e["subject"], "—", e["from"])
 
-# read full email
+# Read a full email
 email = asyncio.run(client.read_email(emails[0]["id"]))
 print(email["body"])
+
+# Send an email
+send(
+    from_addr="you@yourdomain.com",
+    app_password="your_app_password",
+    to="friend@example.com",
+    subject="Hello",
+    body="Hi there!",
+    region="eu",
+)
 ```
 
-## Self-hosted API
+## CLI
 
 ```bash
-cp .env.example .env   # fill in credentials + set a strong API_KEY
+# List inbox
+zohomail list
+zohomail list --limit 20 --json
 
-# with Docker
-docker build -t zohomail-free .
-docker run -p 8000:8000 --env-file .env zohomail-free
+# Read a message (get the id from list output)
+zohomail read --id 1782000221530004400
 
-# or directly
-pip install git+https://github.com/MelkonTech/zohomail-free.git
-zohomail-api
+# Send a new email
+zohomail send --to someone@example.com --subject "Hello" --body "Hi there"
+
+# Reply to an email (preserves threading)
+zohomail reply --id 1782000221530004400 --body "Thanks!"
 ```
 
-### Endpoints
+## Self-hosted REST API
+
+Run a local API server over your Zoho account:
+
+```bash
+# Set API_KEY in your .env, then:
+zohomail-api
+
+# Or with Docker
+docker build -t zohomail-free .
+docker run -p 8000:8000 --env-file .env zohomail-free
+```
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -90,25 +101,17 @@ zohomail-api
 | POST | `/emails/{id}/reply` | Reply to email |
 | GET | `/health` | Health check |
 
-All endpoints require `X-API-Key: <your_key>` header (set `API_KEY` in `.env`).
+All endpoints require `X-API-Key: <your_key>` header.
 
 ```bash
 curl -H "X-API-Key: your_key" http://localhost:8000/emails
 ```
 
-## Deploy to Railway
-
-1. Fork this repo on GitHub
-2. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub repo
-3. Select your fork
-4. Add environment variables from `.env.example` in Railway's Variables tab
-5. Deploy — Railway auto-detects the Dockerfile
-
 ## How it works
 
-Zoho's free plan blocks IMAP/POP3 with `ACCESS_RESTRICTED_BY_ZOHOMAIL`. However, their web UI communicates with an internal JSON API (`ml.do` / `md.do`) over HTTPS. This library uses Playwright to authenticate once, saves the session cookie, then makes API calls from within the browser context where cookies are correctly scoped — no paid plan required.
+Zoho's free plan blocks IMAP/POP3 with `ACCESS_RESTRICTED_BY_ZOHOMAIL`. However, their web UI talks to an internal JSON API (`ml.do` / `md.do`) over HTTPS. This library uses Playwright to authenticate once, saves the session cookie at `~/.zohomail_session.pkl`, then makes API calls from within the browser context where cookies are correctly scoped — no paid plan needed.
 
-Session cookies are cached at `~/.zohomail_session.pkl` and reused on subsequent runs. If the session expires, the library automatically re-authenticates.
+On subsequent runs the saved session is reused. If it expires, the library re-authenticates automatically.
 
 ## Documentation
 
@@ -116,7 +119,7 @@ Full docs at **[melkontech.github.io/zohomail-free](https://melkontech.github.io
 
 ## Author
 
-Built by [MelkonTech](https://melkon.tech/Melkon.Tech/ai/)
+Built by [MelkonTech](https://melkon.tech)
 
 ## License
 
