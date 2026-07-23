@@ -21,6 +21,9 @@ dependencies = [
     "certifi>=2024.0.0",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
 [project.scripts]
 zohomail = "zohomail.cli:main"
 
@@ -32,3 +35,9 @@ Issues = "https://github.com/MelkonTech/zohomail-free/issues"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["zohomail*"]
+
+[tool.setuptools.package-data]
+zohomail = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

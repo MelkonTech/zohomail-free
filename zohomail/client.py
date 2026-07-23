@@ -62,6 +62,35 @@ def strip_html(html: str) -> str:
     return p.get_text()
 
 
+def _parse_attachments(md: dict) -> list[dict]:
+    """Extract attachment metadata from a Zoho message-detail (``mdata``) dict.
+
+    Zoho returns attachments under the ``NEWATT`` key (a list of dicts). Each
+    entry has a filename, format, byte size, and the part/attachment ids needed
+    to reference it. Inline images are flagged so callers can skip them.
+
+    Returns a list of dicts: ``name``, ``format``, ``size_bytes`` (int),
+    ``part_id``, ``attachment_id``, ``inline`` (bool). Empty list if none.
+    """
+    out = []
+    for a in md.get("NEWATT") or []:
+        if not isinstance(a, dict):
+            continue
+        try:
+            size = int(a.get("fs") or a.get("size") or 0)
+        except (TypeError, ValueError):
+            size = 0
+        out.append({
+            "name":          a.get("fn") or a.get("name") or "",
+            "format":        a.get("fmt") or "",
+            "size_bytes":    size,
+            "part_id":       a.get("part") or a.get("p") or "",
+            "attachment_id": a.get("id") or a.get("Id") or "",
+            "inline":        bool(a.get("inline", False)),
+        })
+    return out
+
+
 class ZohoMailClient:
     """Async Zoho Mail client for free-tier accounts.
 
@@ -119,7 +148,19 @@ class ZohoMailClient:
     async def _make_context(self, p):
         browser = await p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-gpu-sandbox",
+                "--single-process",
+                "--no-zygote",
+                "--use-gl=swiftshader-webgl",
+                "--disable-software-rasterizer",
+                "--disable-accelerated-2d-canvas",
+                "--disable-webgl",
+            ],
         )
         ctx = await browser.new_context()
         if self.session_file.exists():
@@ -139,13 +180,15 @@ class ZohoMailClient:
         await page.fill("#password", self.password)
         await page.click("#nextbtn")
         await page.wait_for_timeout(4000)
-        if "tfa-banner" in page.url or "announcement" in page.url:
-            try:
-                await page.click("text=Continue")
-                await page.wait_for_timeout(2000)
-            except Exception:
-                pass
-        if "signin" in page.url or "accounts.zoho" in page.url:
+        if "announcement" in page.url or "tfa-banner" in page.url:
+            for btn in ["Continue", "I Understand", "Proceed", "OK", "Allow", "Confirm"]:
+                try:
+                    await page.click(f"text={btn}", timeout=2000)
+                    await page.wait_for_timeout(3000)
+                    break
+                except Exception:
+                    pass
+        if "/signin" in page.url and "signin-block" not in page.url:
             raise ZohoMailError("Login failed — check ZOHO_EMAIL and ZOHO_PASSWORD")
         cookies = await ctx.cookies()
         self.session_file.write_bytes(pickle.dumps(cookies))
@@ -168,16 +211,33 @@ class ZohoMailClient:
                     pass
 
         page.on("response", on_response)
-        await page.goto(f"{self._mail_url}/mail", wait_until="domcontentloaded")
-        await page.wait_for_timeout(6000)
 
-        if "signin" in page.url or "accounts.zoho" in page.url:
+        async def _goto_mail():
+            try:
+                async with page.expect_response(
+                    lambda r: "ml.do" in r.url, timeout=20000
+                ):
+                    await page.goto(
+                        f"{self._mail_url}/mail",
+                        wait_until="domcontentloaded",
+                        timeout=15000,
+                    )
+            except Exception:
+                pass
+
+        if not self.session_file.exists():
+            # No cached session — go straight to login, skip the mail probe
+            await self._login(page, ctx)
+
+        await _goto_mail()
+
+        if "/signin" in page.url or "accounts.zoho" in page.url:
+            # Cached session expired — clear and re-login
             if self.session_file.exists():
                 self.session_file.unlink()
             await self._login(page, ctx)
             self._inbox_data = None
-            await page.goto(f"{self._mail_url}/mail", wait_until="domcontentloaded")
-            await page.wait_for_timeout(6000)
+            await _goto_mail()
 
         if not self._ml_host:
             raise ZohoMailError(
@@ -289,6 +349,9 @@ class ZohoMailClient:
             - ``message_id`` (*str*) — RFC 2822 Message-ID for threading.
             - ``body`` (*str*) — Plain-text body (stripped from HTML).
             - ``body_html`` (*str*) — Raw HTML body.
+            - ``attachments`` (*list[dict]*) — One entry per attachment with
+              ``name``, ``format``, ``size_bytes``, ``part_id``,
+              ``attachment_id``, and ``inline``. Empty list if none.
 
         Raises:
             ZohoMailError: If authentication or the API call fails.
@@ -321,15 +384,16 @@ class ZohoMailClient:
                 md = data[1]["mdata"]
                 html = md.get("CONTENT", "")
                 return {
-                    "id":         msg_id,
-                    "from":       md.get("FROM", ""),
-                    "reply_to":   md.get("REPLYTO") or md.get("FROM", ""),
-                    "to":         md.get("DELIVEREDTO", ""),
-                    "date":       md.get("SENTTIME", ""),
-                    "subject":    md.get("SB", ""),
-                    "message_id": md.get("MAILID", ""),
-                    "body":       strip_html(html) if html else "",
-                    "body_html":  html,
+                    "id":          msg_id,
+                    "from":        md.get("FROM", ""),
+                    "reply_to":    md.get("REPLYTO") or md.get("FROM", ""),
+                    "to":          md.get("DELIVEREDTO", ""),
+                    "date":        md.get("SENTTIME", ""),
+                    "subject":     md.get("SB", ""),
+                    "message_id":  md.get("MAILID", ""),
+                    "body":        strip_html(html) if html else "",
+                    "body_html":   html,
+                    "attachments": _parse_attachments(md),
                 }
             finally:
                 await browser.close()

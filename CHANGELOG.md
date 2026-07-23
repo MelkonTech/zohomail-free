@@ -7,15 +7,27 @@ All notable changes to `zohomail-free` are documented here.
 First stable release.
 
 ### Added
-- **MCP integration** — the hosted API now exposes a Model Context Protocol
-  endpoint (`/mcp`) so Zoho Mail can be plugged directly into Claude, Cursor, or
-  any MCP-compatible assistant. Tools: `list_emails`, `read_email`, `send_email`,
+- **Attachments** — `read_email()` now returns an `attachments` list. Each entry
+  has `name`, `format`, `size_bytes`, `part_id`, `attachment_id`, and `inline`,
+  parsed from Zoho's `NEWATT` metadata (previously discarded).
+- **MCP integration** — the hosted API exposes a Model Context Protocol endpoint
+  (`/mcp`) so Zoho Mail can plug directly into Claude, Cursor, or any
+  MCP-compatible assistant. Tools: `list_emails`, `read_email`, `send_email`,
   `reply_email`. See the README for config.
+- **Type marker** — ships `py.typed` (PEP 561), so downstream type checkers now
+  pick up the library's type hints.
+- **Test suite** — pytest coverage for HTML stripping, attachment parsing, SMTP
+  message construction, and the AI helpers; runs with no Zoho account or network.
+- **CI** — GitHub Actions runs the tests on Python 3.11/3.12/3.13, and a
+  Trusted-Publishing workflow releases to PyPI on each GitHub Release.
 
 ### Changed
-- Chromium now launches with `--no-sandbox`, `--disable-dev-shm-usage`, and
-  `--disable-gpu`, so the client runs reliably inside Docker, AWS Lambda, and CI
-  containers.
+- **More reliable auth on servers.** Chromium launches with a serverless-hardened
+  flag set (`--no-sandbox`, `--single-process`, `--no-zygote`,
+  swiftshader GL, and more) so it runs inside Docker, AWS Lambda, and CI.
+- **More robust login and inbox load.** Login cycles through Zoho's consent
+  prompts, and the inbox load waits for the `ml.do` API response instead of a
+  fixed sleep — fewer flaky "could not discover API host" failures.
 
 ## 0.1.5 - 2026-06-21
 - Use `/tmp` for the session cache on AWS Lambda.

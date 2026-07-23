@@ -3,6 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/zohomail-free.svg)](https://pypi.org/project/zohomail-free/)
 [![Python 3.11+](https://img.shields.io/pypi/pyversions/zohomail-free.svg)](https://pypi.org/project/zohomail-free/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests](https://github.com/MelkonTech/zohomail-free/actions/workflows/test.yml/badge.svg)](https://github.com/MelkonTech/zohomail-free/actions/workflows/test.yml)
 
 > Built by [MelkonTech](https://melkon.tech)  
 > [Documentation](https://melkontech.github.io/zohomail-free/) · [PyPI](https://pypi.org/project/zohomail-free/) · [GitHub](https://github.com/MelkonTech/zohomail-free)
@@ -49,9 +50,11 @@ emails = asyncio.run(client.list_emails(limit=5))
 for e in emails:
     print(e["subject"], "—", e["from"])
 
-# Read a full email
+# Read a full email (includes any attachments' metadata)
 email = asyncio.run(client.read_email(emails[0]["id"]))
 print(email["body"])
+for att in email["attachments"]:
+    print(att["name"], att["size_bytes"], "bytes")
 
 # Send an email
 send(
@@ -173,9 +176,24 @@ Zoho's free plan blocks IMAP/POP3 with `ACCESS_RESTRICTED_BY_ZOHOMAIL`. However,
 
 On subsequent runs the saved session is reused. If it expires, the library re-authenticates automatically.
 
+## Development
+
+```bash
+git clone https://github.com/MelkonTech/zohomail-free
+cd zohomail-free
+pip install -e ".[dev]"
+pytest
+```
+
+The test suite covers the pure logic (HTML stripping, attachment parsing, SMTP
+message construction, and the AI helpers) and runs without a Zoho account or
+network access.
+
 ## Documentation
 
 Full docs at **[melkontech.github.io/zohomail-free](https://melkontech.github.io/zohomail-free/)**
+
+Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 ## Author
 
