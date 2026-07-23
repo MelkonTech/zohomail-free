@@ -130,6 +130,43 @@ curl https://zohomail.free.melkon.tech/emails \
 
 Interactive docs at **[zohomail.free.melkon.tech/docs](https://zohomail.free.melkon.tech/docs)** — no sign-up, no API key.
 
+## MCP (AI Assistant Integration)
+
+The hosted API exposes a **Model Context Protocol** endpoint so you can plug Zoho Mail directly into Claude, Cursor, or any MCP-compatible AI assistant.
+
+Add this to your MCP config (`claude_desktop_config.json` or `.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "zohomail": {
+      "url": "https://zohomail.free.melkon.tech/mcp"
+    }
+  }
+}
+```
+
+Available tools: `list_emails`, `read_email`, `send_email`, `reply_email`. Pass your Zoho credentials as tool arguments — they are never stored.
+
+Or call it directly:
+
+```bash
+curl -s https://zohomail.free.melkon.tech/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+    "params": {
+      "name": "list_emails",
+      "arguments": {
+        "zoho_email": "you@yourdomain.com",
+        "zoho_password": "yourpassword",
+        "zoho_region": "eu",
+        "limit": 5
+      }
+    }
+  }'
+```
+
 ## How it works
 
 Zoho's free plan blocks IMAP/POP3 with `ACCESS_RESTRICTED_BY_ZOHOMAIL`. However, their web UI talks to an internal JSON API (`ml.do` / `md.do`) over HTTPS. This library uses Playwright to authenticate once, saves the session cookie at `~/.zohomail_session.pkl`, then makes API calls from within the browser context — no paid plan needed.

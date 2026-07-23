@@ -117,7 +117,10 @@ class ZohoMailClient:
     # ── internal ──────────────────────────────────────────────────────────────
 
     async def _make_context(self, p):
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+        )
         ctx = await browser.new_context()
         if self.session_file.exists():
             try:
