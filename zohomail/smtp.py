@@ -12,7 +12,7 @@ Note:
 import smtplib
 import ssl
 from email.message import EmailMessage
-from email.utils import formatdate, make_msgid
+from email.utils import formataddr, formatdate, make_msgid
 
 
 def _ssl_ctx() -> ssl.SSLContext:
@@ -31,6 +31,7 @@ def send(
     body: str,
     *,
     region: str = "eu",
+    from_name: str = "",
     cc: list[str] | None = None,
     html: bool = False,
     in_reply_to: str = "",
@@ -45,6 +46,10 @@ def send(
         subject: Email subject line.
         body: Email body — plain text, or HTML if ``html=True``.
         region: Zoho data-centre — ``"eu"`` (default) or ``"com"``.
+        from_name: Display name shown to recipients, e.g. ``"Ada Lovelace"``
+            renders as ``Ada Lovelace <ada@example.com>``. Defaults to empty,
+            which sends a bare address; most clients then invent a name from
+            the local part, so ``hi@example.com`` shows up as "hi".
         cc: Optional list of CC addresses.
         html: If ``True``, send ``body`` as HTML (with a plain-text fallback).
         in_reply_to: RFC 2822 ``Message-ID`` of the email being replied to.
@@ -72,7 +77,7 @@ def send(
     """
     host = f"smtp.zoho.{'eu' if region.lower() == 'eu' else 'com'}"
     msg = EmailMessage()
-    msg["From"] = from_addr
+    msg["From"] = formataddr((from_name, from_addr)) if from_name else from_addr
     msg["To"] = ", ".join(to)
     if cc:
         msg["Cc"] = ", ".join(cc)
