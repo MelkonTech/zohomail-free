@@ -215,7 +215,7 @@ class ZohoMailClient:
         async def _goto_mail():
             try:
                 async with page.expect_response(
-                    lambda r: "ml.do" in r.url, timeout=20000
+                    lambda r: "ml.do" in r.url, timeout=120000
                 ):
                     await page.goto(
                         f"{self._mail_url}/mail",
