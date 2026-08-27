@@ -217,8 +217,10 @@ class ZohoMailClient:
                 async with page.expect_response(
                     lambda r: "ml.do" in r.url, timeout=120000
                 ):
+                    # Zoho's /zm/ SPA (Aug 2026) boots to an idle shell and only
+                    # fires the ml.do listing once routed to the inbox hash.
                     await page.goto(
-                        f"{self._mail_url}/mail",
+                        f"{self._mail_url}/zm/#mail/folder/inbox",
                         wait_until="domcontentloaded",
                         timeout=15000,
                     )
