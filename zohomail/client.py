@@ -29,6 +29,22 @@ _default_session_dir = Path("/tmp") if os.environ.get("AWS_LAMBDA_FUNCTION_NAME"
 SESSION_FILE = _default_session_dir / ".zohomail_session.pkl"
 
 
+def _unescape(value: str) -> str:
+    """Zoho double-escapes header values in listings ("&lt;a@b&gt;")."""
+    return html_lib.unescape(html_lib.unescape(value or "")).strip()
+
+
+def _first_epoch_ms(row: dict, *keys: str) -> int:
+    """First key in `keys` whose value looks like an epoch-ms integer, else 0."""
+    for k in keys:
+        v = row.get(k)
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str) and v.isdigit():
+            return int(v)
+    return 0
+
+
 class ZohoMailError(Exception):
     """Base exception for all zohomail-free errors."""
 
@@ -300,7 +316,8 @@ class ZohoMailClient:
             raise ZohoMailError(f"folder not found in Zoho folder tree: {folder!r}")
         return fid
 
-    async def list_emails(self, limit: int = 10, folder: str | None = None) -> list[dict]:
+    async def list_emails(self, limit: int = 10, folder: str | None = None,
+                          conversations: bool = False) -> list[dict]:
         """List the most recent inbox messages.
 
         Authenticates if needed, then returns a list of email summaries
@@ -317,7 +334,11 @@ class ZohoMailClient:
             - ``id`` (*str*) — Zoho message ID, used with :meth:`read_email`.
             - ``from`` (*str*) — Sender email address.
             - ``subject`` (*str*) — Message subject.
-            - ``time_ms`` (*int*) — Received timestamp in milliseconds.
+            - ``time_ms`` (*int*) — Epoch ms. For a message that belongs to a
+              thread Zoho reports the thread's last activity here, not the
+              message's own time, so treat it as approximate and read the
+              message for its true ``Date`` header.
+            - ``to`` (*str*) — Recipient, useful in Sent.
             - ``unread`` (*bool*) — ``True`` if the message is unread.
 
         Raises:
@@ -336,11 +357,15 @@ class ZohoMailClient:
                 # a smart folder), which silently returns a stale/partial inbox.
                 # Always ask for the range we actually want, newest first.
                 fol_id = await self._resolve_folder(page, folder)
+                # folderSpec 0 lists every individual message; 2 is Zoho's
+                # conversation view, where a reply of ours is folded into the
+                # thread row and its sender/subject are the counterparty's. That
+                # view silently hides sent replies, so it is not the default.
                 data = await self._fetch(page, self._ml_url(), {
                     "xhr": int(time.time() * 1000), "mode": "listing",
                     "accId": self.account_id, "from": 1, "to": limit,
                     "summary": "true", "sortBy": "date", "sortOrder": "false",
-                    "folderSpec": 2, "folId": fol_id,
+                    "folderSpec": 2 if conversations else 0, "folId": fol_id,
                 })
                 msgs = [m for m in data[1] if isinstance(m, dict) and "M" in m]
                 return [
@@ -348,9 +373,15 @@ class ZohoMailClient:
                         "id":      m["M"],
                         "from":    m.get("F", ""),
                         "subject": m.get("SB", ""),
-                        "time_ms": int(m.get("LTIME", 0)),
+                        # LTIME is the message's own time for a standalone
+                        # message, but the thread's last activity for one that
+                        # belongs to a thread. Approximate by design; read_email
+                        # returns the true Date header.
+                        "time_ms": _first_epoch_ms(m, "LTIME", "R", "ST"),
                         "unread":  m.get("RS", 1) != 1,
-                        "to":      m.get("T", m.get("TO", "")),
+                        # TOADDR is the recipient; T is the thread id and is
+                        # not an address, so it must never be used as a fallback.
+                        "to":      _unescape(m.get("TOADDR") or m.get("TO") or ""),
                     }
                     for m in msgs[:limit]
                 ]
@@ -397,7 +428,7 @@ class ZohoMailClient:
                     "xhr": int(time.time() * 1000), "mode": "listing",
                     "accId": self.account_id, "from": 1, "to": 50,
                     "summary": "true", "sortBy": "date", "sortOrder": "false",
-                    "folderSpec": 2, "folId": fol_id,
+                    "folderSpec": 0, "folId": fol_id,
                 })
                 mail_id = next(
                     (m.get("MAILID", "") for m in inbox[1]

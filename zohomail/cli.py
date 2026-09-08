@@ -36,7 +36,8 @@ def _smtp_password() -> str:
 
 def cmd_list(args):
     client = _client()
-    msgs = asyncio.run(client.list_emails(limit=args.limit, folder=args.folder))
+    msgs = asyncio.run(client.list_emails(limit=args.limit, folder=args.folder,
+                                          conversations=args.conversations))
     if args.json:
         print(json.dumps(msgs, indent=2))
         return
@@ -121,6 +122,8 @@ def build_parser():
     sp = sub.add_parser("list", help="list inbox messages")
     sp.add_argument("--limit", type=int, default=10)
     sp.add_argument("--folder", default=None, help='folder name, e.g. Sent, Drafts, Spam (default Inbox)')
+    sp.add_argument("--conversations", action="store_true",
+                    help="group into threads like the web UI (hides own replies inside a thread)")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=cmd_list)
 
