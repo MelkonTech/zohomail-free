@@ -16,6 +16,7 @@ Example:
 import json
 import pickle
 import time
+import html as html_lib
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -307,15 +308,16 @@ class ZohoMailClient:
         async with async_playwright() as p:
             browser, page = await self._get_page(p)
             try:
-                if self._inbox_data:
-                    data = self._inbox_data
-                else:
-                    data = await self._fetch(page, self._ml_url(), {
-                        "xhr": int(time.time() * 1000), "mode": "listing",
-                        "accId": self.account_id, "from": 1, "to": limit,
-                        "summary": "true", "sortBy": "date", "sortOrder": "false",
-                        "folderSpec": 2, "folId": self.folder_id,
-                    })
+                # Never reuse the page-load capture here: the SPA fires several
+                # ml.do calls and the last one may be a different view (Unread,
+                # a smart folder), which silently returns a stale/partial inbox.
+                # Always ask for the range we actually want, newest first.
+                data = await self._fetch(page, self._ml_url(), {
+                    "xhr": int(time.time() * 1000), "mode": "listing",
+                    "accId": self.account_id, "from": 1, "to": limit,
+                    "summary": "true", "sortBy": "date", "sortOrder": "false",
+                    "folderSpec": 2, "folId": self.folder_id,
+                })
                 msgs = [m for m in data[1] if isinstance(m, dict) and "M" in m]
                 return [
                     {
@@ -387,11 +389,11 @@ class ZohoMailClient:
                 html = md.get("CONTENT", "")
                 return {
                     "id":          msg_id,
-                    "from":        md.get("FROM", ""),
-                    "reply_to":    md.get("REPLYTO") or md.get("FROM", ""),
-                    "to":          md.get("DELIVEREDTO", ""),
+                    "from":        html_lib.unescape(md.get("FROM", "")),
+                    "reply_to":    html_lib.unescape(md.get("REPLYTO") or md.get("FROM", "")),
+                    "to":          html_lib.unescape(md.get("DELIVEREDTO", "")),
                     "date":        md.get("SENTTIME", ""),
-                    "subject":     md.get("SB", ""),
+                    "subject":     html_lib.unescape(md.get("SB", "")),
                     "message_id":  md.get("MAILID", ""),
                     "body":        strip_html(html) if html else "",
                     "body_html":   html,
