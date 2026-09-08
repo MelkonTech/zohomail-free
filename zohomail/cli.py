@@ -36,22 +36,24 @@ def _smtp_password() -> str:
 
 def cmd_list(args):
     client = _client()
-    msgs = asyncio.run(client.list_emails(limit=args.limit))
+    msgs = asyncio.run(client.list_emails(limit=args.limit, folder=args.folder))
     if args.json:
         print(json.dumps(msgs, indent=2))
         return
-    print(f"Inbox — {len(msgs)} messages:\n")
+    print(f"{args.folder or 'Inbox'}: {len(msgs)} messages\n")
     for m in msgs:
         flag = "*" if m["unread"] else " "
         print(f"[{flag}] {m['id']}")
         print(f"     From:    {m['from']}")
+        if m.get("to"):
+            print(f"     To:      {m['to']}")
         print(f"     Subject: {m['subject']}")
         print()
 
 
 def cmd_read(args):
     client = _client()
-    m = asyncio.run(client.read_email(args.id))
+    m = asyncio.run(client.read_email(args.id, folder=args.folder))
     if args.json:
         print(json.dumps(m, indent=2))
         return
@@ -118,11 +120,13 @@ def build_parser():
 
     sp = sub.add_parser("list", help="list inbox messages")
     sp.add_argument("--limit", type=int, default=10)
+    sp.add_argument("--folder", default=None, help='folder name, e.g. Sent, Drafts, Spam (default Inbox)')
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=cmd_list)
 
     sp = sub.add_parser("read", help="read a message by id")
     sp.add_argument("--id", required=True)
+    sp.add_argument("--folder", default=None, help="folder the id lives in (default Inbox)")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=cmd_read)
 

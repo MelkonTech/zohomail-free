@@ -277,7 +277,30 @@ class ZohoMailClient:
 
     # ── public API ────────────────────────────────────────────────────────────
 
-    async def list_emails(self, limit: int = 10) -> list[dict]:
+
+    async def _resolve_folder(self, page, folder: str | None) -> str:
+        """Map a folder name ("Inbox", "Sent", "Drafts", "Spam"...) to its folId.
+
+        Zoho's SPA keeps the tree at window.zmail.folTree[0] keyed by folId,
+        each entry carrying the display name in FN. None/"" keeps the inbox id
+        discovered at page load, so existing callers are unchanged."""
+        if not folder or folder.lower() == "inbox":
+            return self.folder_id
+        fid = await page.evaluate(
+            """(name) => {
+                const t = (window.zmail && window.zmail.folTree && window.zmail.folTree[0]) || {};
+                const want = name.toLowerCase();
+                for (const k of Object.keys(t)) {
+                    const fn = String((t[k] && t[k].FN) || "").toLowerCase();
+                    if (fn === want || fn === want + " items" || fn === want + " mail") return k;
+                }
+                return "";
+            }""", folder)
+        if not fid:
+            raise ZohoMailError(f"folder not found in Zoho folder tree: {folder!r}")
+        return fid
+
+    async def list_emails(self, limit: int = 10, folder: str | None = None) -> list[dict]:
         """List the most recent inbox messages.
 
         Authenticates if needed, then returns a list of email summaries
@@ -312,11 +335,12 @@ class ZohoMailClient:
                 # ml.do calls and the last one may be a different view (Unread,
                 # a smart folder), which silently returns a stale/partial inbox.
                 # Always ask for the range we actually want, newest first.
+                fol_id = await self._resolve_folder(page, folder)
                 data = await self._fetch(page, self._ml_url(), {
                     "xhr": int(time.time() * 1000), "mode": "listing",
                     "accId": self.account_id, "from": 1, "to": limit,
                     "summary": "true", "sortBy": "date", "sortOrder": "false",
-                    "folderSpec": 2, "folId": self.folder_id,
+                    "folderSpec": 2, "folId": fol_id,
                 })
                 msgs = [m for m in data[1] if isinstance(m, dict) and "M" in m]
                 return [
@@ -326,13 +350,14 @@ class ZohoMailClient:
                         "subject": m.get("SB", ""),
                         "time_ms": int(m.get("LTIME", 0)),
                         "unread":  m.get("RS", 1) != 1,
+                        "to":      m.get("T", m.get("TO", "")),
                     }
                     for m in msgs[:limit]
                 ]
             finally:
                 await browser.close()
 
-    async def read_email(self, msg_id: str) -> dict:
+    async def read_email(self, msg_id: str, folder: str | None = None) -> dict:
         """Read the full content of a single email.
 
         Fetches the complete message including HTML body, sender details,
@@ -367,14 +392,13 @@ class ZohoMailClient:
         async with async_playwright() as p:
             browser, page = await self._get_page(p)
             try:
-                inbox = self._inbox_data
-                if not inbox:
-                    inbox = await self._fetch(page, self._ml_url(), {
-                        "xhr": int(time.time() * 1000), "mode": "listing",
-                        "accId": self.account_id, "from": 1, "to": 50,
-                        "summary": "true", "sortBy": "date", "sortOrder": "false",
-                        "folderSpec": 2, "folId": self.folder_id,
-                    })
+                fol_id = await self._resolve_folder(page, folder)
+                inbox = await self._fetch(page, self._ml_url(), {
+                    "xhr": int(time.time() * 1000), "mode": "listing",
+                    "accId": self.account_id, "from": 1, "to": 50,
+                    "summary": "true", "sortBy": "date", "sortOrder": "false",
+                    "folderSpec": 2, "folId": fol_id,
+                })
                 mail_id = next(
                     (m.get("MAILID", "") for m in inbox[1]
                      if isinstance(m, dict) and m.get("M") == msg_id),
@@ -383,7 +407,7 @@ class ZohoMailClient:
                 data = await self._fetch(page, self._md_url(), {
                     "xhr": int(time.time() * 1000), "accId": self.account_id,
                     "summary": "true", "msgId": msg_id, "vfc": "false",
-                    "split": "true", "folId": self.folder_id, "mailId": mail_id,
+                    "split": "true", "folId": fol_id, "mailId": mail_id,
                 })
                 md = data[1]["mdata"]
                 html = md.get("CONTENT", "")
