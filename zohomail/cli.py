@@ -65,7 +65,7 @@ def cmd_read(args):
     print(f"Subject:    {m['subject']}")
     print(f"Message-ID: {m['message_id']}")
     print(f"\n{'-'*60}\n")
-    print(m["body"][:4000] or "(empty)")
+    print(m["body"] or "(empty)")
 
 
 def cmd_send(args):
