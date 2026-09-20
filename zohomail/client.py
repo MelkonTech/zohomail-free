@@ -430,11 +430,11 @@ class ZohoMailClient:
                     "summary": "true", "sortBy": "date", "sortOrder": "false",
                     "folderSpec": 0, "folId": fol_id,
                 })
-                mail_id = next(
-                    (m.get("MAILID", "") for m in inbox[1]
-                     if isinstance(m, dict) and m.get("M") == msg_id),
-                    ""
+                row = next(
+                    (m for m in inbox[1] if isinstance(m, dict) and m.get("M") == msg_id),
+                    {},
                 )
+                mail_id = row.get("MAILID", "")
                 data = await self._fetch(page, self._md_url(), {
                     "xhr": int(time.time() * 1000), "accId": self.account_id,
                     "summary": "true", "msgId": msg_id, "vfc": "false",
@@ -448,7 +448,8 @@ class ZohoMailClient:
                     "reply_to":    html_lib.unescape(md.get("REPLYTO") or md.get("FROM", "")),
                     "to":          html_lib.unescape(md.get("DELIVEREDTO", "")),
                     "date":        md.get("SENTTIME", ""),
-                    "subject":     html_lib.unescape(md.get("SB", "")),
+                    # md.do returns SB empty for some messages; the listing row has it.
+                    "subject":     html_lib.unescape(md.get("SB") or row.get("SB", "")),
                     "message_id":  md.get("MAILID", ""),
                     "body":        strip_html(html) if html else "",
                     "body_html":   html,
