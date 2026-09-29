@@ -64,8 +64,25 @@ def cmd_read(args):
     print(f"Date:       {m['date']}")
     print(f"Subject:    {m['subject']}")
     print(f"Message-ID: {m['message_id']}")
+    atts = m.get("attachments") or []
+    if atts:
+        print("Attachments:")
+        for a in atts:
+            tag = " (inline)" if a["inline"] else ""
+            print(f"  {a['name']}  {a['size_bytes']} bytes{tag}")
     print(f"\n{'-'*60}\n")
     print(m["body"] or "(empty)")
+
+
+def cmd_download(args):
+    client = _client()
+    paths = asyncio.run(client.download_attachments(
+        args.id, args.out, folder=args.folder, include_inline=args.inline))
+    if not paths:
+        print("No attachments to download.")
+        return
+    for p in paths:
+        print(f"{p}  {p.stat().st_size} bytes")
 
 
 def cmd_send(args):
@@ -132,6 +149,13 @@ def build_parser():
     sp.add_argument("--folder", default=None, help="folder the id lives in (default Inbox)")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=cmd_read)
+
+    sp = sub.add_parser("download", help="download a message's attachments")
+    sp.add_argument("--id", required=True)
+    sp.add_argument("--folder", default=None, help="folder the id lives in (default Inbox)")
+    sp.add_argument("--out", default=".", help="destination directory (default current dir)")
+    sp.add_argument("--inline", action="store_true", help="also download inline images")
+    sp.set_defaults(func=cmd_download)
 
     sp = sub.add_parser("send", help="send a new email")
     sp.add_argument("--to", action="append", required=True)

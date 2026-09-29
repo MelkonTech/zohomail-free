@@ -13,13 +13,18 @@ Example:
     >>> print(emails[0]["subject"])
 """
 
+import asyncio
 import json
 import pickle
+import re
+import ssl
 import time
+import urllib.error
+import urllib.request
 import html as html_lib
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlencode
 
 from playwright.async_api import async_playwright
 
@@ -106,6 +111,76 @@ def _parse_attachments(md: dict) -> list[dict]:
             "inline":        bool(a.get("inline", False)),
         })
     return out
+
+
+_AV_MARKER = "ANTIVIRUS_CHECK_INPROGRESS"
+
+
+def _ssl_context() -> ssl.SSLContext:
+    """TLS context for attachment downloads. Verification is never disabled.
+
+    Order: ``SSL_CERT_FILE`` / ``REQUESTS_CA_BUNDLE`` (for TLS-inspecting
+    proxies whose root CA is not in the default store), then ``certifi`` if
+    installed, then the platform default store.
+    """
+    for var in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"):
+        path = os.environ.get(var)
+        if path and Path(path).is_file():
+            return ssl.create_default_context(cafile=path)
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
+
+def _safe_filename(name: str, fallback: str) -> str:
+    """Strip path separators and control characters from an attachment name."""
+    name = re.sub(r"[\\/\x00-\x1f]", "_", name or "").strip().strip(".")
+    return name or fallback
+
+
+def _unique_path(dest_dir: Path, name: str) -> Path:
+    """``dest_dir/name``, or ``name (1).ext``, ``name (2).ext`` if taken."""
+    path = dest_dir / name
+    stem, suffix = path.stem, path.suffix
+    n = 1
+    while path.exists():
+        path = dest_dir / f"{stem} ({n}){suffix}"
+        n += 1
+    return path
+
+
+def _http_download(url: str, cookie_header: str, referer: str,
+                   retries: int = 8, delay: float = 4.0) -> bytes:
+    """GET ``url`` with session cookies, retrying while Zoho's antivirus scan runs."""
+    ctx = _ssl_context()
+    req = urllib.request.Request(url, headers={
+        "Cookie": cookie_header,
+        "Referer": referer,
+        "User-Agent": "Mozilla/5.0 (zohomail-free)",
+    })
+    for attempt in range(retries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=120, context=ctx) as r:
+                data = r.read()
+        except urllib.error.HTTPError as e:
+            raise ZohoMailError(f"Download failed: HTTP {e.code}") from e
+        except urllib.error.URLError as e:
+            if isinstance(e.reason, ssl.SSLError):
+                raise ZohoMailError(
+                    f"TLS verification failed ({e.reason}). Behind a TLS-inspecting "
+                    "proxy, point SSL_CERT_FILE at a CA bundle that includes its root."
+                ) from e
+            raise ZohoMailError(f"Download failed: {e.reason}") from e
+        # While scanning, Zoho answers 200 with a small JSON error instead of the file.
+        if len(data) < 512 and _AV_MARKER.encode() in data:
+            if attempt < retries:
+                time.sleep(delay)
+                continue
+            raise ZohoMailError("Attachment still in antivirus check, try again shortly")
+        return data
+    raise ZohoMailError("Download failed")  # pragma: no cover
 
 
 class ZohoMailClient:
@@ -423,40 +498,105 @@ class ZohoMailClient:
         async with async_playwright() as p:
             browser, page = await self._get_page(p)
             try:
-                fol_id = await self._resolve_folder(page, folder)
-                inbox = await self._fetch(page, self._ml_url(), {
-                    "xhr": int(time.time() * 1000), "mode": "listing",
-                    "accId": self.account_id, "from": 1, "to": 50,
-                    "summary": "true", "sortBy": "date", "sortOrder": "false",
-                    "folderSpec": 0, "folId": fol_id,
-                })
-                row = next(
-                    (m for m in inbox[1] if isinstance(m, dict) and m.get("M") == msg_id),
-                    {},
-                )
-                mail_id = row.get("MAILID", "")
-                data = await self._fetch(page, self._md_url(), {
-                    "xhr": int(time.time() * 1000), "accId": self.account_id,
-                    "summary": "true", "msgId": msg_id, "vfc": "false",
-                    "split": "true", "folId": fol_id, "mailId": mail_id,
-                })
-                md = data[1]["mdata"]
-                html = md.get("CONTENT", "")
-                return {
-                    "id":          msg_id,
-                    "from":        html_lib.unescape(md.get("FROM", "")),
-                    "reply_to":    html_lib.unescape(md.get("REPLYTO") or md.get("FROM", "")),
-                    "to":          html_lib.unescape(md.get("DELIVEREDTO", "")),
-                    "date":        md.get("SENTTIME", ""),
-                    # md.do returns SB empty for some messages; the listing row has it.
-                    "subject":     html_lib.unescape(md.get("SB") or row.get("SB", "")),
-                    "message_id":  md.get("MAILID", ""),
-                    "body":        strip_html(html) if html else "",
-                    "body_html":   html,
-                    "attachments": _parse_attachments(md),
-                }
+                return await self._read_in_page(page, msg_id, folder)
             finally:
                 await browser.close()
+
+    async def _read_in_page(self, page, msg_id: str, folder: str | None) -> dict:
+        fol_id = await self._resolve_folder(page, folder)
+        inbox = await self._fetch(page, self._ml_url(), {
+            "xhr": int(time.time() * 1000), "mode": "listing",
+            "accId": self.account_id, "from": 1, "to": 50,
+            "summary": "true", "sortBy": "date", "sortOrder": "false",
+            "folderSpec": 0, "folId": fol_id,
+        })
+        row = next(
+            (m for m in inbox[1] if isinstance(m, dict) and m.get("M") == msg_id),
+            {},
+        )
+        mail_id = row.get("MAILID", "")
+        data = await self._fetch(page, self._md_url(), {
+            "xhr": int(time.time() * 1000), "accId": self.account_id,
+            "summary": "true", "msgId": msg_id, "vfc": "false",
+            "split": "true", "folId": fol_id, "mailId": mail_id,
+        })
+        md = data[1]["mdata"]
+        html = md.get("CONTENT", "")
+        return {
+            "id":          msg_id,
+            "from":        html_lib.unescape(md.get("FROM", "")),
+            "reply_to":    html_lib.unescape(md.get("REPLYTO") or md.get("FROM", "")),
+            "to":          html_lib.unescape(md.get("DELIVEREDTO", "")),
+            "date":        md.get("SENTTIME", ""),
+            # md.do returns SB empty for some messages; the listing row has it.
+            "subject":     html_lib.unescape(md.get("SB") or row.get("SB", "")),
+            "message_id":  md.get("MAILID", ""),
+            "body":        strip_html(html) if html else "",
+            "body_html":   html,
+            "attachments": _parse_attachments(md),
+        }
+
+    async def download_attachments(self, msg_id: str, dest_dir, folder: str | None = None,
+                                   include_inline: bool = False) -> list[Path]:
+        """Download a message's attachments into ``dest_dir``.
+
+        Metadata and session cookies are collected inside the browser, the
+        browser is closed, and the files are then fetched over plain HTTP with
+        those cookies (Chromium runs ``--single-process``, which breaks
+        in-browser request APIs). TLS is always verified; see ``_ssl_context``
+        for how the CA bundle is chosen.
+
+        Args:
+            msg_id: Zoho message ID.
+            dest_dir: Directory to save into (created if missing).
+            folder: Folder the message lives in (default Inbox).
+            include_inline: Also download inline images. Skipped by default.
+
+        Returns:
+            Saved file paths. Files keep their names; duplicates get
+            `` (1)``, `` (2)`` suffixes. Empty list if there is nothing to save.
+
+        Raises:
+            ZohoMailError: On auth, API, TLS or download failure, or if a
+                downloaded file's size differs from Zoho's metadata.
+        """
+        async with async_playwright() as p:
+            browser, page = await self._get_page(p)
+            try:
+                msg = await self._read_in_page(page, msg_id, folder)
+                cookies = await page.context.cookies()
+            finally:
+                await browser.close()
+
+        atts = [a for a in msg["attachments"]
+                if a["attachment_id"] and (include_inline or not a["inline"])]
+        if not atts:
+            return []
+
+        dest = Path(dest_dir)
+        dest.mkdir(parents=True, exist_ok=True)
+        tld = "eu" if self.region == "eu" else "com"
+        cookie_header = "; ".join(
+            f"{c['name']}={c['value']}" for c in cookies if "zoho" in c.get("domain", "")
+        )
+        saved: list[Path] = []
+        for i, a in enumerate(atts, 1):
+            qs = urlencode({
+                "pd": f"mail.zoho.{tld}", "entityType": 1, "entityId": msg_id,
+                "attachId": a["attachment_id"], "accId": self.account_id,
+                "checkOffline": "true",
+            })
+            url = f"https://zmdownload-accl.zoho.{tld}/normalDownload?{qs}"
+            data = await asyncio.to_thread(
+                _http_download, url, cookie_header, self._mail_url + "/")
+            if a["size_bytes"] and len(data) != a["size_bytes"]:
+                raise ZohoMailError(
+                    f"Size mismatch for {a['name']!r}: got {len(data)} bytes, "
+                    f"Zoho metadata says {a['size_bytes']}")
+            path = _unique_path(dest, _safe_filename(a["name"], f"attachment-{i}"))
+            path.write_bytes(data)
+            saved.append(path)
+        return saved
 
     async def get_thread_info(self, msg_id: str) -> dict:
         """Return the minimal headers needed to reply to a message.

@@ -2,6 +2,16 @@
 
 All notable changes to `zohomail-free` are documented here.
 
+## 1.1.0 - 2026-09-29
+
+### Added
+- `ZohoMailClient.download_attachments(msg_id, dest_dir, folder=None, include_inline=False)`
+  saves attachments to a directory and returns the paths.
+- CLI `zohomail download --id ID [--folder X] [--out DIR] [--inline]`.
+- `zohomail read` prints an `Attachments:` list.
+- Downloads verify TLS using `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `certifi` or
+  the system store, and retry while Zoho's antivirus check is in progress.
+
 ## 1.0.0 - 2026-07-24
 
 First stable release.

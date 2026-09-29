@@ -46,7 +46,31 @@ zohomail read --id <message_id> [--json]
 ```
 
 | Flag | Required | Description |
+|`read` also prints an `Attachments:` list (name and size) when the message has any.
+
+---
+
+## download
+
+Save a message's attachments to a directory.
+
+```bash
+zohomail download --id <message_id> [--folder NAME] [--out DIR] [--inline]
+```
+
+| Flag | Default | Description |
 |---|---|---|
+| `--id` | required | Message ID from `zohomail list` |
+| `--folder` | Inbox | Folder the message lives in |
+| `--out` | `.` | Destination directory (created if missing) |
+| `--inline` | off | Also save inline images |
+
+Prints each saved path and its size. Files keep their names; duplicates get
+` (1)`, ` (2)` suffixes. Sizes are checked against Zoho's metadata. TLS is always
+verified; behind a TLS-inspecting proxy set `SSL_CERT_FILE` to a CA bundle that
+includes the proxy root.
+
+---|---|---|
 | `--id` | yes | Message ID from `zohomail list` output |
 | `--json` | no | Output raw JSON including HTML body |
 

@@ -56,6 +56,9 @@ print(email["body"])
 for att in email["attachments"]:
     print(att["name"], att["size_bytes"], "bytes")
 
+# Download the attachments (returns the saved paths)
+paths = asyncio.run(client.download_attachments(emails[0]["id"], "./downloads"))
+
 # Send an email
 send(
     from_addr="you@yourdomain.com",
@@ -77,12 +80,25 @@ zohomail list --limit 20 --json
 # Read a message (get the id from list output)
 zohomail read --id 1782000221530004400
 
+# Download a message's attachments (--folder, --inline optional)
+zohomail download --id 1782000221530004400 --out ./downloads
+
 # Send a new email
 zohomail send --to someone@example.com --subject "Hello" --body "Hi there"
 
 # Reply to an email (preserves threading)
 zohomail reply --id 1782000221530004400 --body "Thanks!"
 ```
+
+### Attachment downloads and TLS
+
+Files are fetched over plain HTTP with the session cookies after the browser
+closes, and TLS is always verified (never disabled). The CA bundle is taken from
+`SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE`, then `certifi`, then the system store.
+Behind a TLS-inspecting proxy (error `self-signed certificate in certificate
+chain`), export a bundle that includes the proxy root, e.g.
+`security find-certificate -a -p /Library/Keychains/System.keychain /System/Library/Keychains/SystemRootCertificates.keychain > ~/ca.pem`
+then `export SSL_CERT_FILE=~/ca.pem`.
 
 ## AI integration
 
