@@ -2,6 +2,12 @@
 
 All notable changes to `zohomail-free` are documented here.
 
+## Unreleased
+
+### Fixed
+- `download_attachments` sent every Zoho cookie to the download host, which answered
+  HTTP 401. It now sends only the cookies whose domain matches that host.
+
 ## 1.1.0 - 2026-09-29
 
 ### Added

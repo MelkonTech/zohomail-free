@@ -140,6 +140,12 @@ def _safe_filename(name: str, fallback: str) -> str:
     return name or fallback
 
 
+def _cookie_matches(domain: str, host: str) -> bool:
+    """True if a cookie set for ``domain`` is sent to ``host`` (RFC 6265 domain match)."""
+    domain = domain.lstrip(".").lower()
+    return bool(domain) and (host == domain or host.endswith("." + domain))
+
+
 def _unique_path(dest_dir: Path, name: str) -> Path:
     """``dest_dir/name``, or ``name (1).ext``, ``name (2).ext`` if taken."""
     path = dest_dir / name
@@ -576,8 +582,12 @@ class ZohoMailClient:
         dest = Path(dest_dir)
         dest.mkdir(parents=True, exist_ok=True)
         tld = "eu" if self.region == "eu" else "com"
+        # Only cookies a browser would send to the download host. Sending the
+        # mail.zoho / accounts.zoho host cookies too makes it answer HTTP 401.
+        host = f"zmdownload-accl.zoho.{tld}"
         cookie_header = "; ".join(
-            f"{c['name']}={c['value']}" for c in cookies if "zoho" in c.get("domain", "")
+            f"{c['name']}={c['value']}" for c in cookies
+            if _cookie_matches(c.get("domain", ""), host)
         )
         saved: list[Path] = []
         for i, a in enumerate(atts, 1):
@@ -586,7 +596,7 @@ class ZohoMailClient:
                 "attachId": a["attachment_id"], "accId": self.account_id,
                 "checkOffline": "true",
             })
-            url = f"https://zmdownload-accl.zoho.{tld}/normalDownload?{qs}"
+            url = f"https://{host}/normalDownload?{qs}"
             data = await asyncio.to_thread(
                 _http_download, url, cookie_header, self._mail_url + "/")
             if a["size_bytes"] and len(data) != a["size_bytes"]:
