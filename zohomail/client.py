@@ -158,14 +158,23 @@ def _unique_path(dest_dir: Path, name: str) -> Path:
 
 
 def _http_download(url: str, cookie_header: str, referer: str,
-                   retries: int = 8, delay: float = 4.0) -> bytes:
-    """GET ``url`` with session cookies, retrying while Zoho's antivirus scan runs."""
+                   retries: int = 8, delay: float = 4.0, sid: str = "") -> bytes:
+    """GET ``url`` with session cookies, retrying while Zoho's antivirus scan runs.
+
+    ``sid`` is the web client's session id (``window.zmail._ws.sessionId``),
+    sent as the ``sid`` header like the SPA does. Attachments of about 1 MB and
+    up answer HTTP 401 with an empty body without it.
+    """
     ctx = _ssl_context()
-    req = urllib.request.Request(url, headers={
+    headers = {
         "Cookie": cookie_header,
         "Referer": referer,
+        "Origin": referer.rstrip("/"),
         "User-Agent": "Mozilla/5.0 (zohomail-free)",
-    })
+    }
+    if sid:
+        headers["sid"] = sid
+    req = urllib.request.Request(url, headers=headers)
     for attempt in range(retries + 1):
         try:
             with urllib.request.urlopen(req, timeout=120, context=ctx) as r:
@@ -571,6 +580,12 @@ class ZohoMailClient:
             try:
                 msg = await self._read_in_page(page, msg_id, folder)
                 cookies = await page.context.cookies()
+                try:
+                    sid = await page.evaluate(
+                        "() => (window.zmail && window.zmail._ws "
+                        "&& window.zmail._ws.sessionId) || ''")
+                except Exception:
+                    sid = ""
             finally:
                 await browser.close()
 
@@ -598,7 +613,8 @@ class ZohoMailClient:
             })
             url = f"https://{host}/normalDownload?{qs}"
             data = await asyncio.to_thread(
-                _http_download, url, cookie_header, self._mail_url + "/")
+                _http_download, url, cookie_header, self._mail_url + "/",
+                sid=sid or "")
             if a["size_bytes"] and len(data) != a["size_bytes"]:
                 raise ZohoMailError(
                     f"Size mismatch for {a['name']!r}: got {len(data)} bytes, "
