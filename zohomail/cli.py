@@ -20,7 +20,9 @@ def _client() -> ZohoMailClient:
     region = os.environ.get("ZOHO_REGION", "eu")
     if not email or not password:
         sys.exit("ERROR: set ZOHO_EMAIL and ZOHO_PASSWORD (in env or .env file)")
-    return ZohoMailClient(email=email, password=password, region=region)
+    sf = os.environ.get("ZOHO_SESSION_FILE")
+    return ZohoMailClient(email=email, password=password, region=region,
+                          session_file=Path(sf).expanduser() if sf else None)
 
 
 def _smtp_password() -> str:

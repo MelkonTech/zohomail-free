@@ -319,20 +319,25 @@ class ZohoMailClient:
 
         page.on("response", on_response)
 
-        async def _goto_mail():
+        async def _goto_mail(ml_timeout=180.0):
+            # The mail SPA fires the listing call (ml.do) long after
+            # domcontentloaded, and this browser runs --single-process, so the
+            # whole app boots on one thread. Deep-link the inbox route (the bare
+            # /zm/ shell often sits idle) and wait on _ml_host, which
+            # on_response sets when the call actually goes out.
             try:
-                async with page.expect_response(
-                    lambda r: "ml.do" in r.url, timeout=120000
-                ):
-                    # Zoho's /zm/ SPA (Aug 2026) boots to an idle shell and only
-                    # fires the ml.do listing once routed to the inbox hash.
-                    await page.goto(
-                        f"{self._mail_url}/zm/#mail/folder/inbox",
-                        wait_until="domcontentloaded",
-                        timeout=15000,
-                    )
+                await page.goto(
+                    f"{self._mail_url}/zm/#mail/folder/inbox",
+                    wait_until="domcontentloaded",
+                    timeout=30000,
+                )
             except Exception:
                 pass
+            deadline = time.monotonic() + ml_timeout
+            while not self._ml_host and time.monotonic() < deadline:
+                if "/signin" in page.url or "accounts.zoho" in page.url:
+                    return  # session is gone; the caller re-logins
+                await page.wait_for_timeout(500)
 
         if not self.session_file.exists():
             # No cached session — go straight to login, skip the mail probe
@@ -347,6 +352,17 @@ class ZohoMailClient:
             await self._login(page, ctx)
             self._inbox_data = None
             await _goto_mail()
+
+        # A cold boot occasionally never fires ml.do (seen 2026-11-16 with the
+        # 180 s wait): reload the route once; the warm cache boots faster.
+        if not self._ml_host and not ("/signin" in page.url or "accounts.zoho" in page.url):
+            try:
+                await page.reload(wait_until="domcontentloaded", timeout=30000)
+            except Exception:
+                pass
+            deadline = time.monotonic() + 180.0
+            while not self._ml_host and time.monotonic() < deadline:
+                await page.wait_for_timeout(500)
 
         if not self._ml_host:
             raise ZohoMailError(
@@ -580,12 +596,19 @@ class ZohoMailClient:
             try:
                 msg = await self._read_in_page(page, msg_id, folder)
                 cookies = await page.context.cookies()
-                try:
-                    sid = await page.evaluate(
-                        "() => (window.zmail && window.zmail._ws "
-                        "&& window.zmail._ws.sessionId) || ''")
-                except Exception:
-                    sid = ""
+                sid = ""
+                # The SPA sets its session id a little after the listing call;
+                # reading it too early gives "" and large files answer HTTP 401.
+                for _ in range(60):
+                    try:
+                        sid = await page.evaluate(
+                            "() => (window.zmail && window.zmail._ws "
+                            "&& window.zmail._ws.sessionId) || ''")
+                    except Exception:
+                        sid = ""
+                    if sid:
+                        break
+                    await page.wait_for_timeout(500)
             finally:
                 await browser.close()
 
