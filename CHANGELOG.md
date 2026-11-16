@@ -4,9 +4,18 @@ All notable changes to `zohomail-free` are documented here.
 
 ## Unreleased
 
+### Added
+- CLI: `ZOHO_SESSION_FILE` sets the session cookie file, so each account can keep
+  its own saved login.
+
 ### Fixed
 - `download_attachments` sent every Zoho cookie to the download host, which answered
   HTTP 401. It now sends only the cookies whose domain matches that host.
+- Attachments of 1 MB and up answered HTTP 401: the download now sends the web
+  client's session id header, and waits up to 30 s for the web app to set it.
+- "Could not discover Zoho API host" on a slow start: the client now opens the inbox
+  route directly, waits up to 180 s for the listing call and reloads once before
+  giving up.
 
 ## 1.1.0 - 2026-09-29
 
