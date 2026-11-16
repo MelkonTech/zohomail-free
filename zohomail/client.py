@@ -441,9 +441,9 @@ class ZohoMailClient:
             - ``from`` (*str*) — Sender email address.
             - ``subject`` (*str*) — Message subject.
             - ``time_ms`` (*int*) — Epoch ms. For a message that belongs to a
-              thread Zoho reports the thread's last activity here, not the
-              message's own time, so treat it as approximate and read the
-              message for its true ``Date`` header.
+                thread Zoho reports the thread's last activity here, not the
+                message's own time, so treat it as approximate and read the
+                message for its true ``Date`` header.
             - ``to`` (*str*) — Recipient, useful in Sent.
             - ``unread`` (*bool*) — ``True`` if the message is unread.
 
@@ -516,8 +516,8 @@ class ZohoMailClient:
             - ``body`` (*str*) — Plain-text body (stripped from HTML).
             - ``body_html`` (*str*) — Raw HTML body.
             - ``attachments`` (*list[dict]*) — One entry per attachment with
-              ``name``, ``format``, ``size_bytes``, ``part_id``,
-              ``attachment_id``, and ``inline``. Empty list if none.
+                ``name``, ``format``, ``size_bytes``, ``part_id``,
+                ``attachment_id``, and ``inline``. Empty list if none.
 
         Raises:
             ZohoMailError: If authentication or the API call fails.
@@ -567,7 +567,7 @@ class ZohoMailClient:
             "attachments": _parse_attachments(md),
         }
 
-    async def download_attachments(self, msg_id: str, dest_dir, folder: str | None = None,
+    async def download_attachments(self, msg_id: str, dest_dir: str | Path, folder: str | None = None,
                                    include_inline: bool = False) -> list[Path]:
         """Download a message's attachments into ``dest_dir``.
 
